@@ -544,7 +544,8 @@ func (c *Client) GetTeamIDByName(ctx context.Context, teamName string) (string, 
 	}
 
 	defer func() {
-		if cerr := resp.Body.Close(); cerr != nil {
+		cerr := resp.Body.Close()
+		if cerr != nil {
 			log.Warn().Err(cerr).Msg("failed to close response body")
 		}
 	}()
@@ -559,6 +560,7 @@ func (c *Client) GetTeamIDByName(ctx context.Context, teamName string) (string, 
 	}
 
 	var teams []portainerTeam
+
 	err = json.Unmarshal(responseBody, &teams)
 	if err != nil {
 		return "", fmt.Errorf("failed to unmarshal response: %w", err)
@@ -593,7 +595,8 @@ func (c *Client) SendPutRequest(ctx context.Context, resourceID string, jsonData
 	}
 
 	defer func() {
-		if cerr := resp.Body.Close(); cerr != nil {
+		cerr := resp.Body.Close()
+		if cerr != nil {
 			log.Warn().Err(cerr).Msg("failed to close response body")
 		}
 	}()
@@ -669,7 +672,8 @@ func (c *Client) WaitForStackRunning(ctx context.Context, endpointID int, timeou
 		}
 
 		defer func() {
-			if cerr := resp.Body.Close(); cerr != nil {
+			cerr := resp.Body.Close()
+			if cerr != nil {
 				log.Warn().Err(cerr).Msg("failed to close response body")
 			}
 		}()
@@ -681,6 +685,7 @@ func (c *Client) WaitForStackRunning(ctx context.Context, endpointID int, timeou
 		}
 
 		var tasks []dockerTask
+
 		err = json.NewDecoder(resp.Body).Decode(&tasks)
 		if err != nil {
 			return fmt.Errorf(decodeError+"%w", err)
