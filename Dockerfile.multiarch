@@ -12,6 +12,6 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     make build && \
     rm -rf /var/cache/apk/*
 
-FROM ghcr.io/wntrtech/scratch:latest
+FROM ghcr.io/wntrtech/scratch:v1.0.0-2
 COPY --from=build /src/portainer-deploy-plugin /bin/portainer-deploy-plugin
 ENTRYPOINT ["/bin/portainer-deploy-plugin"]
