@@ -37,6 +37,9 @@ jobs:
       - name: Lint Dockerfile
         run: docker run --rm -v $(pwd):/work hadolint/hadolint:latest-alpine hadolint --ignore DL3018 /work/Dockerfile.multiarch
 
+      - name: Run vet
+        run: go vet ./...
+
       - name: Run tests
         run: go test -timeout=2m -race -coverprofile=coverage.out -covermode=atomic ./...
 
