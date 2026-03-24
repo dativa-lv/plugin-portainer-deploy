@@ -31,7 +31,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2
+          version: v2.1.0
           args: --timeout 3m --output.checkstyle.path golangci-lint.out --output.tab.path stdout
 
       - name: Lint Dockerfile
