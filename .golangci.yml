@@ -1,15 +1,7 @@
-version: 2
+version: "2"
 
 linters:
-  presets:
-    - comment
-    - format
-    - bugs
-    - performance
-    - unused
-    - test
-    - sql
-    - style
+  default: all
 
   enable:
     - wsl_v5
@@ -50,8 +42,11 @@ linters:
           - stylecheck
 
 formatters:
-  presets:
-    - format
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
 
   settings:
     gci:
