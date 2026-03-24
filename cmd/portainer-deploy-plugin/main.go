@@ -11,7 +11,7 @@ import (
 	plugin "github.com/dativa-lv/plugin-portainer-deploy"
 )
 
-var Version = "unknown"
+var Version = "develop"
 
 func main() {
 	plugin.New(Version).Run()

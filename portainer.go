@@ -270,6 +270,7 @@ func (c *Client) CreateOrUpdateStack(ctx context.Context, endpointID int, swarmI
 	for _, stack := range stacks {
 		if stack.Name == c.StackName {
 			log.Info().Msgf("Stack %s already exists, updating...", c.StackName)
+
 			return c.UpdateExistingStack(ctx, stack.ID, endpointID)
 		}
 	}
@@ -493,6 +494,7 @@ func (c *Client) GetResourceID(ctx context.Context, stackID int) (string, error)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return "", fmt.Errorf("status code %d, body: %s", resp.StatusCode, string(body))
 	}
 
@@ -511,7 +513,7 @@ func (c *Client) GetResourceID(ctx context.Context, stackID int) (string, error)
 // GetTeamIDByName retrieves the ID of a team in Portainer given its name.
 func (c *Client) GetTeamIDByName(ctx context.Context, teamName string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		fmt.Sprintf("%s/api/teams", c.ServerURL), nil)
+		c.ServerURL+"/api/teams", nil)
 	if err != nil {
 		return "", fmt.Errorf(requestError+"%w", err)
 	}
@@ -654,6 +656,7 @@ func (c *Client) WaitForStackRunning(ctx context.Context, endpointID int, timeou
 
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
+
 			return fmt.Errorf(serverError+"status code %d, body: %s", resp.StatusCode, string(body))
 		}
 
