@@ -35,7 +35,7 @@ jobs:
           args: --timeout 3m --output.checkstyle.path golangci-lint.out --output.tab.path stdout
 
       - name: Lint Dockerfile
-        run: docker run --rm -v $(pwd):/work hadolint/hadolint:latest-alpine hadolint /work/Dockerfile
+        run: docker run --rm -v $(pwd):/work hadolint/hadolint:latest-alpine hadolint /work/Dockerfile.multiarch
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -43,6 +43,7 @@ jobs:
       - name: Build Docker image (dry run)
         uses: docker/build-push-action@v5
         with:
+          file: Dockerfile.multiarch
           push: false
           load: true
           tags: test
