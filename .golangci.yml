@@ -24,7 +24,9 @@ linters:
     - nilnil
     - containedctx
     - dupword # for swagger docs
-    - tagliatelle # Posrtainer need camel
+    - tagliatelle # Portainer need camel
+    - canonicalheader
+    - cyclop
 
   settings:
     wsl_v5:

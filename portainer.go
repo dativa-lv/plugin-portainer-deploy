@@ -79,7 +79,7 @@ type portainerTeam struct {
 }
 
 // Set constants for...
-const (
+const ( //nolint:gosec // G101: these are header/error string constants, not credentials
 	apiKeyHeader      = "X-API-Key"
 	contentTypeHeader = "Content-Type"
 	contentTypeJSON   = "application/json"
@@ -120,36 +120,6 @@ func NewClient(plugin *Plugin, c Client) (*Client, error) {
 		HealthCheckURL:     c.HealthCheckURL,
 		HealthCheckTimeout: c.HealthCheckTimeout,
 	}, nil
-}
-
-func (c *Client) stackEnv() []map[string]string {
-	env := []map[string]string{}
-
-	if c.RunningCheck {
-		env = append(env,
-			map[string]string{"name": "RUNNING_CHECK", "value": "true"},
-			map[string]string{"name": "RUNNING_CHECK_TIMEOUT", "value": c.RunningTimeout},
-		)
-	}
-
-	if c.HealthCheck {
-		env = append(env,
-			map[string]string{"name": "HEALTH_CHECK", "value": "true"},
-			map[string]string{"name": "HEALTH_CHECK_URL", "value": c.HealthCheckURL},
-		)
-	}
-
-	return env
-}
-
-// readYAMLAsString reads a YAML file and returns its content as a string.
-func (c *Client) readYAMLAsString() (string, error) {
-	data, err := os.ReadFile(c.StackPath)
-	if err != nil {
-		return "", fmt.Errorf("error reading YAML file: %w", err)
-	}
-
-	return string(data), nil
 }
 
 // ConvertToIntSlice converts a slice of strings to a slice of integers, skipping unparseable values.
@@ -567,7 +537,7 @@ func (c *Client) GetTeamIDByName(ctx context.Context, teamName string) (string, 
 
 	var teams []portainerTeam
 	if err := json.Unmarshal(responseBody, &teams); err != nil {
-		return "", fmt.Errorf("failed to unmarshal response: %v", err)
+		return "", fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
 	target := strings.TrimSpace(teamName)
@@ -737,7 +707,7 @@ func (c *Client) CheckHealth(ctx context.Context, healthURL string, timeout time
 				Status string `json:"status"`
 			}
 			if jsonErr := json.Unmarshal(body, &hj); jsonErr == nil && hj.Status == "fail" {
-				return fmt.Errorf("health endpoint reported status: fail")
+				return errors.New("health endpoint reported status: fail")
 			}
 		}
 
@@ -749,4 +719,34 @@ func (c *Client) CheckHealth(ctx context.Context, healthURL string, timeout time
 
 		return nil
 	})
+}
+
+func (c *Client) stackEnv() []map[string]string {
+	env := []map[string]string{}
+
+	if c.RunningCheck {
+		env = append(env,
+			map[string]string{"name": "RUNNING_CHECK", "value": "true"},
+			map[string]string{"name": "RUNNING_CHECK_TIMEOUT", "value": c.RunningTimeout},
+		)
+	}
+
+	if c.HealthCheck {
+		env = append(env,
+			map[string]string{"name": "HEALTH_CHECK", "value": "true"},
+			map[string]string{"name": "HEALTH_CHECK_URL", "value": c.HealthCheckURL},
+		)
+	}
+
+	return env
+}
+
+// readYAMLAsString reads a YAML file and returns its content as a string.
+func (c *Client) readYAMLAsString() (string, error) {
+	data, err := os.ReadFile(c.StackPath)
+	if err != nil {
+		return "", fmt.Errorf("error reading YAML file: %w", err)
+	}
+
+	return string(data), nil
 }

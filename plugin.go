@@ -34,6 +34,7 @@ type Settings struct {
 // Plugin implements provide the plugin.
 type Plugin struct {
 	*plugin.Plugin
+
 	Settings *Settings
 }
 
