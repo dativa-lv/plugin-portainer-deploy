@@ -41,7 +41,8 @@ type Plugin struct {
 // New creates and initializes a new plugin.
 func New(version string) *Plugin {
 	if envFile, set := os.LookupEnv("PLUGIN_ENV_FILE"); set {
-		if err := godotenv.Overload(envFile); err != nil {
+		err := godotenv.Overload(envFile)
+		if err != nil {
 			log.Error().Err(err).Msg("couldn't load env file")
 		}
 	}

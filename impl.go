@@ -141,7 +141,8 @@ func (p *Plugin) Execute(ctx context.Context) error {
 		timeout, _ := time.ParseDuration(p.Settings.RunningTimeout)
 		log.Info().Msgf("Stack deployed; waiting for stack %s to be Running (timeout: %s)...", p.Settings.StackName, timeout)
 
-		if err := client.WaitForStackRunning(ctx, endpointID, timeout); err != nil {
+		err := client.WaitForStackRunning(ctx, endpointID, timeout)
+		if err != nil {
 			return fmt.Errorf("running check failed: %w", err)
 		}
 	}
@@ -150,7 +151,8 @@ func (p *Plugin) Execute(ctx context.Context) error {
 		timeout, _ := time.ParseDuration(p.Settings.HealthCheckTimeout)
 		log.Info().Msgf("Stack %s is Running; checking service health at %s (timeout: %s)...", p.Settings.StackName, p.Settings.HealthCheckURL, timeout)
 
-		if err := client.CheckHealth(ctx, p.Settings.HealthCheckURL, timeout); err != nil {
+		err := client.CheckHealth(ctx, p.Settings.HealthCheckURL, timeout)
+		if err != nil {
 			return fmt.Errorf("health check failed: %w", err)
 		}
 	}
