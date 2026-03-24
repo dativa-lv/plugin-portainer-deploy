@@ -79,8 +79,8 @@ type portainerTeam struct {
 }
 
 // Set constants for...
-const ( //nolint:gosec // G101: these are header/error string constants, not credentials
-	apiKeyHeader      = "X-API-Key"
+const (
+	apiKeyHeader      = "X-API-Key" //nolint:gosec // G101: header name constant, not a credential
 	contentTypeHeader = "Content-Type"
 	contentTypeJSON   = "application/json"
 	requestError      = "failed to create request: "
@@ -170,6 +170,7 @@ func (c *Client) GetEndpointID(ctx context.Context) (int, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return 0, fmt.Errorf(serverError+"status code %d, body: %s", resp.StatusCode, string(body))
 	}
 
@@ -213,6 +214,7 @@ func (c *Client) GetSwarmID(ctx context.Context, endpointID int) (string, error)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return "", fmt.Errorf(serverError+"status code %d, body: %s", resp.StatusCode, string(body))
 	}
 
@@ -256,6 +258,7 @@ func (c *Client) CreateOrUpdateStack(ctx context.Context, endpointID int, swarmI
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return 0, fmt.Errorf(serverError+"status code %d, body: %s", resp.StatusCode, string(body))
 	}
 
