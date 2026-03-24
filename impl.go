@@ -83,7 +83,7 @@ func (p *Plugin) Execute(ctx context.Context) error {
 	// Parse Teams once here so the client receives a clean []string.
 	var teams []string
 
-	for _, t := range strings.Split(p.Settings.Teams, ",") {
+	for t := range strings.SplitSeq(p.Settings.Teams, ",") {
 		if trimmed := strings.TrimSpace(t); trimmed != "" {
 			teams = append(teams, trimmed)
 		}

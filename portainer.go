@@ -284,7 +284,7 @@ func (c *Client) CreateNewStack(ctx context.Context, endpointID int, swarmID str
 		return 0, fmt.Errorf("failed to read YAML file: %w", err)
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"Name":             c.StackName,
 		"SwarmID":          swarmID,
 		"StackFileContent": yamlContent,
@@ -358,7 +358,7 @@ func (c *Client) UpdateExistingStack(ctx context.Context, stackID int, endpointI
 		return 0, fmt.Errorf("failed to read YAML file: %w", err)
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"Env":              c.stackEnv(),
 		"Prune":            c.Prune,
 		"StackFileContent": yamlContent,
@@ -505,7 +505,7 @@ func (c *Client) GetResourceID(ctx context.Context, stackID int) (string, error)
 		return "", fmt.Errorf("ResourceControl not found for stack %d", stackID)
 	}
 
-	return fmt.Sprintf("%d", detail.ResourceControl.ID), nil
+	return strconv.Itoa(detail.ResourceControl.ID), nil
 }
 
 // GetTeamIDByName retrieves the ID of a team in Portainer given its name.
@@ -546,7 +546,7 @@ func (c *Client) GetTeamIDByName(ctx context.Context, teamName string) (string, 
 	target := strings.TrimSpace(teamName)
 	for _, team := range teams {
 		if team.Name == target {
-			return fmt.Sprintf("%d", team.ID), nil
+			return strconv.Itoa(team.ID), nil
 		}
 	}
 
