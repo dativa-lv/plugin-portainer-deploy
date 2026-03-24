@@ -45,7 +45,8 @@ func (p *Plugin) Validate() error {
 			return errors.New("running-check-timeout is required when running-check is enabled")
 		}
 
-		if _, err := time.ParseDuration(p.Settings.RunningTimeout); err != nil {
+		_, err := time.ParseDuration(p.Settings.RunningTimeout)
+		if err != nil {
 			return fmt.Errorf("invalid running-check-timeout %q: %w", p.Settings.RunningTimeout, err)
 		}
 	}
@@ -67,7 +68,8 @@ func (p *Plugin) validateHealthCheck() error {
 		return fmt.Errorf("health-check-url must be a full URL, got %q", p.Settings.HealthCheckURL)
 	}
 
-	if _, err := time.ParseDuration(p.Settings.HealthCheckTimeout); err != nil {
+	_, err = time.ParseDuration(p.Settings.HealthCheckTimeout)
+	if err != nil {
 		return fmt.Errorf("invalid health-check-timeout %q: %w", p.Settings.HealthCheckTimeout, err)
 	}
 
@@ -76,7 +78,8 @@ func (p *Plugin) validateHealthCheck() error {
 
 // Execute performs the main functionality of the Plugin.
 func (p *Plugin) Execute(ctx context.Context) error {
-	if err := p.Validate(); err != nil {
+	err := p.Validate()
+	if err != nil {
 		return err
 	}
 
