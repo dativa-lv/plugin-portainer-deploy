@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -145,7 +146,7 @@ func (c *Client) stackEnv() []map[string]string {
 func (c *Client) readYAMLAsString() (string, error) {
 	data, err := os.ReadFile(c.StackPath)
 	if err != nil {
-		return "", fmt.Errorf("error reading YAML file: %v", err)
+		return "", fmt.Errorf("error reading YAML file: %w", err)
 	}
 
 	return string(data), nil
@@ -249,7 +250,7 @@ func (c *Client) GetSwarmID(ctx context.Context, endpointID int) (string, error)
 	}
 
 	if swarm.ID == "" {
-		return "", fmt.Errorf("could not find Cluster ID")
+		return "", errors.New("could not find Cluster ID")
 	}
 
 	log.Info().Msgf("Successfully retrieved Swarm ID: %s", swarm.ID)
@@ -363,11 +364,11 @@ func (c *Client) CreateNewStack(ctx context.Context, endpointID int, swarmID str
 
 	var created portainerStack
 	if err := json.Unmarshal(responseBody, &created); err != nil {
-		return 0, fmt.Errorf("failed to unmarshal response: %v", err)
+		return 0, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
 	if created.ID == 0 {
-		return 0, fmt.Errorf("could not retrieve stack ID from response")
+		return 0, errors.New("could not retrieve stack ID from response")
 	}
 
 	log.Info().Msgf("Stack %s successfully created with ID: %d", c.StackName, created.ID)
@@ -430,7 +431,7 @@ func (c *Client) UpdateExistingStack(ctx context.Context, stackID int, endpointI
 
 	var updated portainerStack
 	if err := json.Unmarshal(responseBody, &updated); err != nil {
-		return 0, fmt.Errorf("failed to unmarshal response: %v", err)
+		return 0, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
 	log.Debug().Msgf("Update response: %v", updated)
@@ -651,7 +652,7 @@ func pollUntil(ctx context.Context, timeout, interval time.Duration, checkFn fun
 
 // WaitForStackRunning polls the Docker Swarm tasks API until all tasks for the stack
 // report State == "running", or until timeout elapses.
-// runs every 5 seconds
+// runs every 5 seconds.
 func (c *Client) WaitForStackRunning(ctx context.Context, endpointID int, timeout time.Duration) error {
 	return pollUntil(ctx, timeout, 5*time.Second, func() error {
 		filters := fmt.Sprintf(`{"label":["com.docker.stack.namespace=%s"],"desired-state":["running"]}`, c.StackName)
@@ -704,7 +705,7 @@ func (c *Client) WaitForStackRunning(ctx context.Context, endpointID int, timeou
 
 // CheckHealth polls healthURL until it responds with HTTP 2xx within timeout.
 // If the response Content-Type is application/health+json, a "fail" status body is also treated as unhealthy.
-// runs every 5 seconds
+// runs every 5 seconds.
 func (c *Client) CheckHealth(ctx context.Context, healthURL string, timeout time.Duration) error {
 	return pollUntil(ctx, timeout, 5*time.Second, func() error {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)

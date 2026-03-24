@@ -20,7 +20,7 @@ import (
 // Validate handles the settings validation of the plugin.
 func (p *Plugin) Validate() error {
 	if p.Settings.APIKey == "" {
-		return fmt.Errorf("you must provide an API key")
+		return errors.New("you must provide an API key")
 	}
 
 	if p.Settings.ServerURL == "" {
