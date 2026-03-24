@@ -1,0 +1,67 @@
+version: 2
+
+linters:
+  presets:
+    - comment
+    - format
+    - bugs
+    - performance
+    - unused
+    - test
+    - sql
+    - style
+
+  enable:
+    - wsl_v5
+
+  disable:
+    - godox
+    - tagalign
+    - exhaustruct
+    - depguard
+    - wrapcheck
+    - gochecknoinits
+    - varnamelen
+    - funlen
+    - ireturn
+    - mnd
+    - interfacebloat
+    - gochecknoglobals
+    - err113
+    - lll
+    - nilnil
+    - containedctx
+    - dupword # for swagger docs
+
+  settings:
+    wsl_v5:
+      allow-first-in-block: true
+      allow-whole-block: false
+      branch-max-lines: 2
+
+  exclusions:
+    paths:
+      - ".*_test\\.go$"
+      - "testing.go"
+    rules:
+      - text: "the type name `ErrorResponse` should conform to the `XxxError` format"
+        linters:
+          - revive
+          - stylecheck
+
+formatters:
+  presets:
+    - format
+
+  settings:
+    gci:
+      custom-order: true
+      sections:
+        - standard
+        - prefix(github.com/dativa-lv/plugin-portainer-deploy)
+        - default
+
+  exclusions:
+    paths:
+      - ".*_test\\.go$"
+      - "testing.go"
