@@ -162,6 +162,7 @@ func ConvertToIntSlice(strSlice []string) []int {
 		teamID, err := strconv.Atoi(val)
 		if err != nil {
 			log.Debug().Msgf("Skipping unparseable team ID %q: %v", val, err)
+
 			continue
 		}
 
@@ -210,6 +211,7 @@ func (c *Client) GetEndpointID(ctx context.Context) (int, error) {
 	for _, ep := range endpoints {
 		if ep.Name == c.ServerEnvironment {
 			log.Info().Msgf("Successfully retrieved Endpoint ID: %d", ep.ID)
+
 			return ep.ID, nil
 		}
 	}
