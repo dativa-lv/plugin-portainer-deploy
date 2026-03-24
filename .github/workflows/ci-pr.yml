@@ -29,7 +29,7 @@ jobs:
           go generate ./...
 
       - name: golangci-lint
-        uses: golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v6
         with:
           version: latest
           args: --timeout 3m --output.checkstyle.path golangci-lint.out --output.tab.path stdout
