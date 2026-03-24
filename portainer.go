@@ -723,7 +723,8 @@ func (c *Client) CheckHealth(ctx context.Context, healthURL string, timeout time
 		}
 
 		defer func() {
-			if cerr := resp.Body.Close(); cerr != nil {
+			cerr := resp.Body.Close()
+			if cerr != nil {
 				log.Warn().Err(cerr).Msg("failed to close response body")
 			}
 		}()
@@ -738,7 +739,9 @@ func (c *Client) CheckHealth(ctx context.Context, healthURL string, timeout time
 			var hj struct {
 				Status string `json:"status"`
 			}
-			if jsonErr := json.Unmarshal(body, &hj); jsonErr == nil && hj.Status == "fail" {
+
+			jsonErr := json.Unmarshal(body, &hj)
+			if jsonErr == nil && hj.Status == "fail" {
 				return errors.New("health endpoint reported status: fail")
 			}
 		}
