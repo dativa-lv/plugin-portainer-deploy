@@ -163,7 +163,8 @@ func (c *Client) GetEndpointID(ctx context.Context) (int, error) {
 	}
 
 	defer func() {
-		if cerr := resp.Body.Close(); cerr != nil {
+		cerr := resp.Body.Close()
+		if cerr != nil {
 			log.Warn().Err(cerr).Msg("failed to close response body")
 		}
 	}()
@@ -208,7 +209,8 @@ func (c *Client) GetSwarmID(ctx context.Context, endpointID int) (string, error)
 	}
 
 	defer func() {
-		if cerr := resp.Body.Close(); cerr != nil {
+		cerr := resp.Body.Close()
+		if cerr != nil {
 			log.Warn().Err(cerr).Msg("failed to close response body")
 		}
 	}()
@@ -220,6 +222,7 @@ func (c *Client) GetSwarmID(ctx context.Context, endpointID int) (string, error)
 	}
 
 	var swarm portainerSwarm
+
 	err = json.NewDecoder(resp.Body).Decode(&swarm)
 	if err != nil {
 		return "", fmt.Errorf(decodeError+"%w", err)
@@ -253,7 +256,8 @@ func (c *Client) CreateOrUpdateStack(ctx context.Context, endpointID int, swarmI
 	}
 
 	defer func() {
-		if cerr := resp.Body.Close(); cerr != nil {
+		cerr := resp.Body.Close()
+		if cerr != nil {
 			log.Warn().Err(cerr).Msg("failed to close response body")
 		}
 	}()
@@ -265,6 +269,7 @@ func (c *Client) CreateOrUpdateStack(ctx context.Context, endpointID int, swarmI
 	}
 
 	var stacks []portainerStack
+
 	err = json.NewDecoder(resp.Body).Decode(&stacks)
 	if err != nil {
 		return 0, fmt.Errorf(decodeError+"%w", err)
@@ -342,6 +347,7 @@ func (c *Client) CreateNewStack(ctx context.Context, endpointID int, swarmID str
 	}
 
 	var created portainerStack
+
 	err = json.Unmarshal(responseBody, &created)
 	if err != nil {
 		return 0, fmt.Errorf("failed to unmarshal response: %w", err)
