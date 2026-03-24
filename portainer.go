@@ -175,7 +175,8 @@ func (c *Client) GetEndpointID(ctx context.Context) (int, error) {
 	}
 
 	var endpoints []portainerEndpoint
-	if err := json.NewDecoder(resp.Body).Decode(&endpoints); err != nil {
+	err = json.NewDecoder(resp.Body).Decode(&endpoints)
+	if err != nil {
 		return 0, fmt.Errorf(decodeError+"%w", err)
 	}
 
@@ -219,7 +220,8 @@ func (c *Client) GetSwarmID(ctx context.Context, endpointID int) (string, error)
 	}
 
 	var swarm portainerSwarm
-	if err := json.NewDecoder(resp.Body).Decode(&swarm); err != nil {
+	err = json.NewDecoder(resp.Body).Decode(&swarm)
+	if err != nil {
 		return "", fmt.Errorf(decodeError+"%w", err)
 	}
 
@@ -263,7 +265,8 @@ func (c *Client) CreateOrUpdateStack(ctx context.Context, endpointID int, swarmI
 	}
 
 	var stacks []portainerStack
-	if err := json.NewDecoder(resp.Body).Decode(&stacks); err != nil {
+	err = json.NewDecoder(resp.Body).Decode(&stacks)
+	if err != nil {
 		return 0, fmt.Errorf(decodeError+"%w", err)
 	}
 
@@ -339,7 +342,8 @@ func (c *Client) CreateNewStack(ctx context.Context, endpointID int, swarmID str
 	}
 
 	var created portainerStack
-	if err := json.Unmarshal(responseBody, &created); err != nil {
+	err = json.Unmarshal(responseBody, &created)
+	if err != nil {
 		return 0, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
@@ -406,7 +410,8 @@ func (c *Client) UpdateExistingStack(ctx context.Context, stackID int, endpointI
 	}
 
 	var updated portainerStack
-	if err := json.Unmarshal(responseBody, &updated); err != nil {
+	err = json.Unmarshal(responseBody, &updated)
+	if err != nil {
 		return 0, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
@@ -499,7 +504,8 @@ func (c *Client) GetResourceID(ctx context.Context, stackID int) (string, error)
 	}
 
 	var detail portainerStackDetail
-	if err := json.NewDecoder(resp.Body).Decode(&detail); err != nil {
+	err = json.NewDecoder(resp.Body).Decode(&detail)
+	if err != nil {
 		return "", fmt.Errorf(decodeError+"%w", err)
 	}
 
@@ -541,7 +547,8 @@ func (c *Client) GetTeamIDByName(ctx context.Context, teamName string) (string, 
 	}
 
 	var teams []portainerTeam
-	if err := json.Unmarshal(responseBody, &teams); err != nil {
+	err = json.Unmarshal(responseBody, &teams)
+	if err != nil {
 		return "", fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
@@ -606,7 +613,8 @@ func pollUntil(ctx context.Context, timeout, interval time.Duration, checkFn fun
 	deadline := time.Now().Add(timeout)
 
 	for {
-		if err := checkFn(); err == nil {
+		err := checkFn()
+		if err == nil {
 			return nil
 		}
 
@@ -661,7 +669,8 @@ func (c *Client) WaitForStackRunning(ctx context.Context, endpointID int, timeou
 		}
 
 		var tasks []dockerTask
-		if err := json.NewDecoder(resp.Body).Decode(&tasks); err != nil {
+		err = json.NewDecoder(resp.Body).Decode(&tasks)
+		if err != nil {
 			return fmt.Errorf(decodeError+"%w", err)
 		}
 
