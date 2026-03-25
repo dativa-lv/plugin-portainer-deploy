@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cenkalti/backoff/v5"
 	"github.com/rs/zerolog/log"
 )
 
@@ -21,6 +22,7 @@ import (
 type Client struct {
 	plugin             *Plugin
 	httpClient         *http.Client
+	pollInterval       time.Duration
 	ServerURL          string
 	ServerEnvironment  string
 	APIKey             string
@@ -107,6 +109,7 @@ func NewClient(plugin *Plugin, c Client) (*Client, error) {
 	return &Client{
 		plugin:             plugin,
 		httpClient:         httpClient,
+		pollInterval:       5 * time.Second,
 		ServerURL:          c.ServerURL,
 		ServerEnvironment:  c.ServerEnvironment,
 		StackName:          c.StackName,
@@ -587,53 +590,25 @@ type dockerTask struct {
 	} `json:"Status"`
 }
 
-// pollUntil retries checkFn every interval until it returns nil (success),
-// the timeout elapses, or ctx is cancelled.
-func pollUntil(ctx context.Context, timeout, interval time.Duration, checkFn func() error) error {
-	deadline := time.Now().Add(timeout)
-
-	for {
-		err := checkFn()
-		if err == nil {
-			return nil
-		}
-
-		if time.Now().After(deadline) {
-			lastErr := checkFn()
-			if lastErr == nil {
-				return nil
-			}
-
-			return fmt.Errorf("timed out after %s: last error: %w", timeout, lastErr)
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(interval):
-		}
-	}
-}
-
 // WaitForStackRunning polls the Docker Swarm tasks API until all tasks for the stack
 // report State == "running", or until timeout elapses.
 // runs every 5 seconds.
 func (c *Client) WaitForStackRunning(ctx context.Context, endpointID int, timeout time.Duration) error {
-	return pollUntil(ctx, timeout, 5*time.Second, func() error {
+	operation := func() (struct{}, error) {
 		filters := fmt.Sprintf(`{"label":["com.docker.stack.namespace=%s"],"desired-state":["running"]}`, c.StackName)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 			fmt.Sprintf("%s/api/endpoints/%d/docker/tasks?filters=%s",
 				c.ServerURL, endpointID, url.QueryEscape(filters)), nil)
 		if err != nil {
-			return fmt.Errorf(requestError+"%w", err)
+			return struct{}{}, fmt.Errorf(requestError+"%w", err)
 		}
 
 		req.Header.Set(apiKeyHeader, c.APIKey)
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
-			return fmt.Errorf(requestFailed+"%w", err)
+			return struct{}{}, fmt.Errorf(requestFailed+"%w", err)
 		}
 
 		defer resp.Body.Close()
@@ -641,52 +616,56 @@ func (c *Client) WaitForStackRunning(ctx context.Context, endpointID int, timeou
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 
-			return fmt.Errorf(serverError+"status code %d, body: %s", resp.StatusCode, string(body))
+			return struct{}{}, fmt.Errorf(serverError+"status code %d, body: %s", resp.StatusCode, string(body))
 		}
 
 		var tasks []dockerTask
 
 		err = json.NewDecoder(resp.Body).Decode(&tasks)
 		if err != nil {
-			return fmt.Errorf(decodeError+"%w", err)
+			return struct{}{}, fmt.Errorf(decodeError+"%w", err)
 		}
 
 		if len(tasks) == 0 {
-			return fmt.Errorf("no tasks found for stack %s, waiting for scheduler", c.StackName)
+			return struct{}{}, fmt.Errorf("no tasks found for stack %s, waiting for scheduler", c.StackName)
 		}
 
 		for _, task := range tasks {
 			if task.Status.State != "running" {
-				return fmt.Errorf("task state is %q for stack %s", task.Status.State, c.StackName)
+				return struct{}{}, fmt.Errorf("task state is %q for stack %s", task.Status.State, c.StackName)
 			}
 		}
 
 		log.Info().Msgf("Stack %s is running", c.StackName)
 
-		return nil
-	})
+		return struct{}{}, nil
+	}
+
+	_, err := backoff.Retry(ctx, operation, backoff.WithMaxElapsedTime(timeout), backoff.WithBackOff(backoff.NewConstantBackOff(c.pollInterval)))
+
+	return err
 }
 
 // CheckHealth polls healthURL until it responds with HTTP 2xx within timeout.
 // If the response Content-Type is application/health+json, a "fail" status body is also treated as unhealthy.
 // runs every 5 seconds.
 func (c *Client) CheckHealth(ctx context.Context, healthURL string, timeout time.Duration) error {
-	return pollUntil(ctx, timeout, 5*time.Second, func() error {
+	operation := func() (struct{}, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
 		if err != nil {
-			return fmt.Errorf("failed to create health check request: %w", err)
+			return struct{}{}, fmt.Errorf("failed to create health check request: %w", err)
 		}
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
-			return fmt.Errorf("health check request failed: %w", err)
+			return struct{}{}, fmt.Errorf("health check request failed: %w", err)
 		}
 
 		defer resp.Body.Close()
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return fmt.Errorf("failed to read response body: %w", err)
+			return struct{}{}, fmt.Errorf("failed to read response body: %w", err)
 		}
 
 		// Parse structured status when the server speaks application/health+json.
@@ -697,18 +676,22 @@ func (c *Client) CheckHealth(ctx context.Context, healthURL string, timeout time
 
 			jsonErr := json.Unmarshal(body, &hj)
 			if jsonErr == nil && hj.Status == "fail" {
-				return errors.New("health endpoint reported status: fail")
+				return struct{}{}, errors.New("health endpoint reported status: fail")
 			}
 		}
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return fmt.Errorf("health endpoint returned status %d: %s", resp.StatusCode, string(body))
+			return struct{}{}, fmt.Errorf("health endpoint returned status %d: %s", resp.StatusCode, string(body))
 		}
 
 		log.Info().Msgf("Health check passed (HTTP %d)", resp.StatusCode)
 
-		return nil
-	})
+		return struct{}{}, nil
+	}
+
+	_, err := backoff.Retry(ctx, operation, backoff.WithMaxElapsedTime(timeout), backoff.WithBackOff(backoff.NewConstantBackOff(c.pollInterval)))
+
+	return err
 }
 
 func (c *Client) stackEnv() []map[string]string {

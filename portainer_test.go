@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +21,7 @@ func newTestClient(t *testing.T, hc *http.Client, serverURL, env string) *Client
 	t.Helper()
 	return &Client{
 		httpClient:        hc,
+		pollInterval:      10 * time.Millisecond,
 		ServerURL:         serverURL,
 		ServerEnvironment: env,
 		StackName:         "test-stack",
@@ -503,41 +503,6 @@ func TestUpdateResourceControl_RestrictedWhenTeamsProvided(t *testing.T) {
 	}
 	if !bytes.Contains(seenPutBody, []byte(`"teams":[5,6]`)) {
 		t.Fatalf("expected teams [5,6] in body: %s", string(seenPutBody))
-	}
-}
-
-// --- pollUntil ---
-
-func TestPollUntil_SucceedsAfterRetries(t *testing.T) {
-	ctx := context.Background()
-	var n atomic.Int32
-	err := pollUntil(ctx, 200*time.Millisecond, 5*time.Millisecond, func() error {
-		if n.Add(1) < 3 {
-			return errors.New("not yet")
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("expected success, got %v", err)
-	}
-}
-
-func TestPollUntil_Timeout(t *testing.T) {
-	ctx := context.Background()
-	err := pollUntil(ctx, 30*time.Millisecond, 10*time.Millisecond, func() error {
-		return errors.New("still failing")
-	})
-	if err == nil {
-		t.Fatal("expected timeout error")
-	}
-}
-
-func TestPollUntil_ContextCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	err := pollUntil(ctx, time.Second, 10*time.Millisecond, func() error { return errors.New("no") })
-	if err == nil {
-		t.Fatal("expected ctx error")
 	}
 }
 
