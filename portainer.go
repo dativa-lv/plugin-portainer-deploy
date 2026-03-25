@@ -162,12 +162,7 @@ func (c *Client) GetEndpointID(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf(requestFailed+"%w", err)
 	}
 
-	defer func() {
-		cerr := resp.Body.Close()
-		if cerr != nil {
-			log.Warn().Err(cerr).Msg("failed to close response body")
-		}
-	}()
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -256,12 +251,7 @@ func (c *Client) CreateOrUpdateStack(ctx context.Context, endpointID int, swarmI
 		return 0, fmt.Errorf(requestFailed+"%w", err)
 	}
 
-	defer func() {
-		cerr := resp.Body.Close()
-		if cerr != nil {
-			log.Warn().Err(cerr).Msg("failed to close response body")
-		}
-	}()
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -329,12 +319,7 @@ func (c *Client) CreateNewStack(ctx context.Context, endpointID int, swarmID str
 		return 0, fmt.Errorf(requestFailed+"%w", err)
 	}
 
-	defer func() {
-		cerr := resp.Body.Close()
-		if cerr != nil {
-			log.Warn().Err(cerr).Msg("failed to close response body")
-		}
-	}()
+	defer resp.Body.Close()
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -402,12 +387,7 @@ func (c *Client) UpdateExistingStack(ctx context.Context, stackID int, endpointI
 		return 0, fmt.Errorf(requestFailed+"%w", err)
 	}
 
-	defer func() {
-		cerr := resp.Body.Close()
-		if cerr != nil {
-			log.Warn().Err(cerr).Msg("failed to close response body")
-		}
-	}()
+	defer resp.Body.Close()
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -501,12 +481,7 @@ func (c *Client) GetResourceID(ctx context.Context, stackID int) (string, error)
 		return "", fmt.Errorf(requestFailed+"%w", err)
 	}
 
-	defer func() {
-		cerr := resp.Body.Close()
-		if cerr != nil {
-			log.Warn().Err(cerr).Msg("failed to close response body")
-		}
-	}()
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -543,12 +518,7 @@ func (c *Client) GetTeamIDByName(ctx context.Context, teamName string) (string, 
 		return "", fmt.Errorf(requestFailed+"%w", err)
 	}
 
-	defer func() {
-		cerr := resp.Body.Close()
-		if cerr != nil {
-			log.Warn().Err(cerr).Msg("failed to close response body")
-		}
-	}()
+	defer resp.Body.Close()
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -594,12 +564,7 @@ func (c *Client) SendPutRequest(ctx context.Context, resourceID string, jsonData
 		return "", fmt.Errorf(requestFailed+"%w", err)
 	}
 
-	defer func() {
-		cerr := resp.Body.Close()
-		if cerr != nil {
-			log.Warn().Err(cerr).Msg("failed to close response body")
-		}
-	}()
+	defer resp.Body.Close()
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -671,12 +636,7 @@ func (c *Client) WaitForStackRunning(ctx context.Context, endpointID int, timeou
 			return fmt.Errorf(requestFailed+"%w", err)
 		}
 
-		defer func() {
-			cerr := resp.Body.Close()
-			if cerr != nil {
-				log.Warn().Err(cerr).Msg("failed to close response body")
-			}
-		}()
+		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
@@ -722,12 +682,7 @@ func (c *Client) CheckHealth(ctx context.Context, healthURL string, timeout time
 			return fmt.Errorf("health check request failed: %w", err)
 		}
 
-		defer func() {
-			cerr := resp.Body.Close()
-			if cerr != nil {
-				log.Warn().Err(cerr).Msg("failed to close response body")
-			}
-		}()
+		defer resp.Body.Close()
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {

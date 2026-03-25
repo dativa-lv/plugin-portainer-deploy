@@ -78,7 +78,7 @@ func (p *Plugin) validateHealthCheck() error {
 
 // Execute performs the main functionality of the Plugin.
 func (p *Plugin) Execute(ctx context.Context) error {
-	if err := p.Validate(); err != nil {
+	if err := p.Validate(); err != nil { //nolint:noinlineerr
 		return err
 	}
 
