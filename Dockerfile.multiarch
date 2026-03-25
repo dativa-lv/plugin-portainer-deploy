@@ -6,7 +6,7 @@ COPY . /src
 WORKDIR /src
 
 ARG TARGETOS TARGETARCH
-RUN --mount=type=cache,target=/root/.cache/go-build \
+RUN --mount=type=cache,target=/root/.cache/go-build
 
 FROM ghcr.io/wntrtech/scratch:v1.0.0-2
 COPY --from=build /src/portainer-deploy-plugin /bin/portainer-deploy-plugin
