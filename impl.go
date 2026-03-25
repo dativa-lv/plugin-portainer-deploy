@@ -78,7 +78,7 @@ func (p *Plugin) validateHealthCheck() error {
 
 // Execute performs the main functionality of the Plugin.
 func (p *Plugin) Execute(ctx context.Context) error {
-	if err := p.Validate(); err != nil { //nolint:noinlineerr
+	if err := p.Validate(); err != nil {
 		return err
 	}
 
@@ -129,8 +129,7 @@ func (p *Plugin) Execute(ctx context.Context) error {
 		return fmt.Errorf("failed to create or update stack %s: %w", p.Settings.StackName, err)
 	}
 
-	_, err = client.UpdateResourceControl(ctx, stackID)
-	if err != nil {
+	if _, err := client.UpdateResourceControl(ctx, stackID); err != nil {
 		return fmt.Errorf("failed to update resource control for stack %d: %w", stackID, err)
 	}
 

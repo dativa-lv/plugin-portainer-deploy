@@ -27,6 +27,7 @@ linters:
     - tagliatelle # Portainer need camel
     - canonicalheader
     - cyclop
+    - noinlineerr
 
   settings:
     wsl_v5:
