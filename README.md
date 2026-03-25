@@ -30,7 +30,7 @@ Define the plugin as a step in your `.woodpecker.yaml` and provide settings unde
 | `health-check-url` | _none_ | no* | Full URL to health endpoint. Required when `health-check` is enabled. |
 | `health-check-timeout` | `1m` | no | Timeout for health-check polling (Go duration, e.g. `2m`, `30s`) |
 | `log-level` | `info` | no | Logging level |
-| `transport.skip-verify` | `false` | _optional_ | Skips the SSL verification. |
+| `skip-verify` | `false` | _optional_ | Skips the SSL verification. |
 
 \* Required only when the corresponding feature is enabled.
 
@@ -47,7 +47,7 @@ steps:
       server-url: http://portainer:9000
       api-key:
         from_secret: user-token-secret
-      transport.skip-verify: true
+      skip-verify: true
       server-environment: primary
       stack-name: whoami
       stack-path: whoami.yml
@@ -65,7 +65,7 @@ steps:
       server-url: http://portainer:9000
       api-key:
         from_secret: user-token-secret
-      transport.skip-verify: true
+      skip-verify: true
       server-environment: primary
       stack-name: whoami
       stack-path: whoami.yml
