@@ -20,11 +20,7 @@ jobs:
       - name: Vendor + generate
         env:
           CGO_ENABLED: "0"
-          GOPRIVATE: git.zzdats.lv
-          PACKAGE_TOKEN: ${{ secrets.package_token }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y git
           go mod vendor
           go generate ./...
 
