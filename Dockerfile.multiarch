@@ -1,0 +1,15 @@
+ARG GOLANG_VERSION=1.26.1
+
+FROM --platform=$BUILDPLATFORM golang:${GOLANG_VERSION}-alpine AS build
+
+COPY . /src
+WORKDIR /src
+
+ARG TARGETOS TARGETARCH
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    apk add --no-cache make git && \
+    make build
+
+FROM ghcr.io/wntrtech/scratch:v1.0.0-2
+COPY --from=build /src/portainer-deploy-plugin /bin/portainer-deploy-plugin
+ENTRYPOINT ["/bin/portainer-deploy-plugin"]
