@@ -1,8 +1,4 @@
-// Copyright (c) 2020, the Drone Plugins project authors.
-// Copyright (c) 2021, Robert Kaussow <mail@thegeeklab.de>
-
-// Use of this source code is governed by an Apache 2.0 license that can be
-// found in the LICENSE file.
+// SPDX-License-Identifier: Apache-2.0
 
 // Package plugin implements the Portainer deploy plugin logic.
 package plugin
