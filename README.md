@@ -41,7 +41,7 @@ Define the plugin as a step in your `.woodpecker.yaml` and provide settings unde
 ```yaml
 steps:
   - name: deploy stack
-    image: woodpeckerci/portainer-deploy-plugin
+    image: ghcr.io/dativa-lv/plugin-portainer-deploy
     pull: true
     settings:
       server-url: http://portainer:9000
@@ -59,7 +59,7 @@ steps:
 ```yaml
 steps:
   - name: deploy stack
-    image: woodpeckerci/portainer-deploy-plugin
+    image: ghcr.io/dativa-lv/plugin-portainer-deploy
     pull: true
     settings:
       server-url: http://portainer:9000
