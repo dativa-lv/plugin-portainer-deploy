@@ -624,6 +624,11 @@ func TestWaitForStackRunning_EventuallyRunning(t *testing.T) {
 	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/services") {
+			c := calls.Add(1)
+			state := ""
+			if c > 1 {
+				state = "completed"
+			}
 			_ = json.NewEncoder(w).Encode([]portainerService{{
 				ID: "svc1",
 				Spec: struct {
@@ -645,10 +650,13 @@ func TestWaitForStackRunning_EventuallyRunning(t *testing.T) {
 						}{Replicas: 1},
 					},
 				},
+				UpdateStatus: struct {
+					State string `json:"State"`
+				}{State: state},
 			}})
 			return
 		}
-		c := calls.Add(1)
+		c := calls.Load()
 		if c < 2 {
 			_ = json.NewEncoder(w).Encode([]dockerTask{{
 				ServiceID: "svc1",
@@ -698,6 +706,9 @@ func TestWaitForStackRunning_Timeout(t *testing.T) {
 						}{Replicas: 1},
 					},
 				},
+				UpdateStatus: struct {
+					State string `json:"State"`
+				}{State: "updating"},
 			}})
 			return
 		}

@@ -94,6 +94,9 @@ type portainerService struct {
 			} `json:"Replicated"`
 		} `json:"Mode"`
 	} `json:"Spec"`
+	UpdateStatus struct {
+		State string `json:"State"`
+	} `json:"UpdateStatus"`
 }
 
 // Set constants for...
@@ -652,7 +655,7 @@ func (c *Client) WaitForStackRunning(ctx context.Context, endpointID int, timeou
 			return struct{}{}, fmt.Errorf(decodeError+"%w", err)
 		}
 
-		// Verify each service has desired replicas running
+		// Verify each service has desired replicas running and update is complete
 		for _, service := range services {
 			desiredReplicas := service.Spec.Mode.Replicated.Replicas
 			runningCount := int64(0)
@@ -667,6 +670,12 @@ func (c *Client) WaitForStackRunning(ctx context.Context, endpointID int, timeou
 				return struct{}{}, fmt.Errorf(
 					"service %s: %d/%d replicas running",
 					service.Spec.Name, runningCount, desiredReplicas)
+			}
+
+			if service.UpdateStatus.State != "" && service.UpdateStatus.State != "completed" {
+				return struct{}{}, fmt.Errorf(
+					"service %s: update in progress (state: %s)",
+					service.Spec.Name, service.UpdateStatus.State)
 			}
 		}
 

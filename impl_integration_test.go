@@ -66,6 +66,9 @@ func TestClientWorkflow_Integration_HappyPath_AllChecksEnabled(t *testing.T) {
 					}{Replicas: 1},
 				},
 			},
+			UpdateStatus: struct {
+				State string `json:"State"`
+			}{State: "completed"},
 		}})
 	})
 	mux.HandleFunc("/api/endpoints/1/docker/tasks", func(w http.ResponseWriter, r *http.Request) {
@@ -161,6 +164,9 @@ func TestServiceUpdateWorkflow_Integration_WithChecksEnabled(t *testing.T) {
 					}{Replicas: 1},
 				},
 			},
+			UpdateStatus: struct {
+				State string `json:"State"`
+			}{State: "completed"},
 		}})
 	})
 	mux.HandleFunc("/api/endpoints/1/forceupdateservice", func(w http.ResponseWriter, r *http.Request) {
