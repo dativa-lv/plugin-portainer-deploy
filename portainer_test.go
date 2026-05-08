@@ -623,16 +623,47 @@ func TestUpdateStackServices_FiltersByServiceName(t *testing.T) {
 func TestWaitForStackRunning_EventuallyRunning(t *testing.T) {
 	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c := calls.Add(1)
-		if c < 2 {
-			_ = json.NewEncoder(w).Encode([]dockerTask{{Status: struct {
-				State string `json:"State"`
-			}{State: "pending"}}})
+		if strings.Contains(r.URL.Path, "/services") {
+			_ = json.NewEncoder(w).Encode([]portainerService{{
+				ID: "svc1",
+				Spec: struct {
+					Name string `json:"Name"`
+					Mode struct {
+						Replicated struct {
+							Replicas int64 `json:"Replicas"`
+						} `json:"Replicated"`
+					} `json:"Mode"`
+				}{
+					Name: "mystack_app",
+					Mode: struct {
+						Replicated struct {
+							Replicas int64 `json:"Replicas"`
+						} `json:"Replicated"`
+					}{
+						Replicated: struct {
+							Replicas int64 `json:"Replicas"`
+						}{Replicas: 1},
+					},
+				},
+			}})
 			return
 		}
-		_ = json.NewEncoder(w).Encode([]dockerTask{{Status: struct {
-			State string `json:"State"`
-		}{State: "running"}}})
+		c := calls.Add(1)
+		if c < 2 {
+			_ = json.NewEncoder(w).Encode([]dockerTask{{
+				ServiceID: "svc1",
+				Status: struct {
+					State string `json:"State"`
+				}{State: "pending"},
+			}})
+			return
+		}
+		_ = json.NewEncoder(w).Encode([]dockerTask{{
+			ServiceID: "svc1",
+			Status: struct {
+				State string `json:"State"`
+			}{State: "running"},
+		}})
 	}))
 	defer srv.Close()
 
@@ -645,9 +676,37 @@ func TestWaitForStackRunning_EventuallyRunning(t *testing.T) {
 
 func TestWaitForStackRunning_Timeout(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode([]dockerTask{{Status: struct {
-			State string `json:"State"`
-		}{State: "pending"}}})
+		if strings.Contains(r.URL.Path, "/services") {
+			_ = json.NewEncoder(w).Encode([]portainerService{{
+				ID: "svc1",
+				Spec: struct {
+					Name string `json:"Name"`
+					Mode struct {
+						Replicated struct {
+							Replicas int64 `json:"Replicas"`
+						} `json:"Replicated"`
+					} `json:"Mode"`
+				}{
+					Name: "mystack_app",
+					Mode: struct {
+						Replicated struct {
+							Replicas int64 `json:"Replicas"`
+						} `json:"Replicated"`
+					}{
+						Replicated: struct {
+							Replicas int64 `json:"Replicas"`
+						}{Replicas: 1},
+					},
+				},
+			}})
+			return
+		}
+		_ = json.NewEncoder(w).Encode([]dockerTask{{
+			ServiceID: "svc1",
+			Status: struct {
+				State string `json:"State"`
+			}{State: "pending"},
+		}})
 	}))
 	defer srv.Close()
 
