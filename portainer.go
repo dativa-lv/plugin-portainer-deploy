@@ -777,6 +777,7 @@ func (c *Client) filterServicesByName(services []portainerService) []portainerSe
 	}
 
 	selected := make([]portainerService, 0, 1)
+
 	for _, service := range services {
 		if service.Spec.Name == target || strings.HasSuffix(service.Spec.Name, "_"+target) {
 			selected = append(selected, service)
