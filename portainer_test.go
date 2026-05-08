@@ -322,6 +322,37 @@ func TestGetEndpointID_RespectsContextCancellation(t *testing.T) {
 	}
 }
 
+func TestValidate_AllowsServiceUpdateModeWithoutStackPath(t *testing.T) {
+	p := &Plugin{Settings: &Settings{
+		APIKey:            "key",
+		ServerURL:         "https://portainer.example",
+		ServerEnvironment: "prod",
+		StackName:         "mystack",
+	}}
+
+	if err := p.Validate(); err != nil {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+}
+
+func TestValidate_AllowsChecksWithoutStackPath(t *testing.T) {
+	p := &Plugin{Settings: &Settings{
+		APIKey:             "key",
+		ServerURL:          "https://portainer.example",
+		ServerEnvironment:  "prod",
+		StackName:          "mystack",
+		RunningCheck:       true,
+		RunningTimeout:     "1m",
+		HealthCheck:        true,
+		HealthCheckURL:     "https://example.com/health",
+		HealthCheckTimeout: "1m",
+	}}
+
+	if err := p.Validate(); err != nil {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+}
+
 // containsString is a simple helper to avoid importing strings in tests.
 func containsString(s, sub string) bool { return strings.Contains(s, sub) }
 
@@ -505,6 +536,85 @@ func TestUpdateResourceControl_RestrictedWhenTeamsProvided(t *testing.T) {
 	}
 	if !bytes.Contains(seenPutBody, []byte(`"teams":[5,6]`)) {
 		t.Fatalf("expected teams [5,6] in body: %s", string(seenPutBody))
+	}
+}
+
+// --- UpdateStackServices ---
+
+func TestUpdateStackServices_UpdatesAllServices(t *testing.T) {
+	var forceCalls []map[string]any
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/endpoints/1/docker/v1.47/services":
+			if !strings.Contains(r.URL.RawQuery, "filters=") {
+				t.Fatalf("expected filters query, got %s", r.URL.RawQuery)
+			}
+			svc1 := portainerService{ID: "svc-1"}
+			svc1.Spec.Name = "mystack_app"
+			svc2 := portainerService{ID: "svc-2"}
+			svc2.Spec.Name = "mystack_worker"
+			_ = json.NewEncoder(w).Encode([]portainerService{svc1, svc2})
+		case r.Method == http.MethodPut && r.URL.Path == "/api/endpoints/1/forceupdateservice":
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode payload: %v", err)
+			}
+			forceCalls = append(forceCalls, payload)
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.Client(), srv.URL, "prod")
+	c.StackName = "mystack"
+	if err := c.UpdateStackServices(context.Background(), 1); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(forceCalls) != 2 {
+		t.Fatalf("expected 2 force update calls, got %d", len(forceCalls))
+	}
+}
+
+func TestUpdateStackServices_FiltersByServiceName(t *testing.T) {
+	var forceCalls []map[string]any
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/endpoints/1/docker/v1.47/services":
+			svc1 := portainerService{ID: "svc-1"}
+			svc1.Spec.Name = "mystack_app"
+			svc2 := portainerService{ID: "svc-2"}
+			svc2.Spec.Name = "mystack_worker"
+			_ = json.NewEncoder(w).Encode([]portainerService{svc1, svc2})
+		case r.Method == http.MethodPut && r.URL.Path == "/api/endpoints/1/forceupdateservice":
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode payload: %v", err)
+			}
+			forceCalls = append(forceCalls, payload)
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.Client(), srv.URL, "prod")
+	c.StackName = "mystack"
+	c.ServiceName = "app"
+	if err := c.UpdateStackServices(context.Background(), 1); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(forceCalls) != 1 {
+		t.Fatalf("expected 1 force update call, got %d", len(forceCalls))
+	}
+	if forceCalls[0]["serviceID"] != "svc-1" {
+		t.Fatalf("expected svc-1, got %#v", forceCalls[0]["serviceID"])
 	}
 }
 

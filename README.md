@@ -6,6 +6,7 @@ Portainer Deploy Plugin for Woodpecker-CI supports GitOps workflows by deploying
 
 - Deploy a new stack to Portainer
 - Update an existing stack
+- Update services in an existing stack and pull the latest images
 - Wait until all stack tasks reach the **Running** state (enabled by default)
 - Optionally poll a service health endpoint after the stack is running
 
@@ -21,7 +22,8 @@ Define the plugin as a step in your `.woodpecker.yaml` and provide settings unde
 | `api-key` | _none_ | yes | Portainer API key (X-API-Key) |
 | `server-environment` | _none_ | yes | Portainer environment (endpoint) name (e.g. `primary`) |
 | `stack-name` | _none_ | yes | Stack name in Portainer |
-| `stack-path` | _none_ | yes | Path to the stack YAML file in the workspace |
+| `stack-path` | _none_ | no* | Path to the stack YAML file in the workspace. Leave empty to update services in the existing stack instead of redeploying the stack file. |
+| `service-name` | _empty_ | no | Optional service name to update within the stack. If empty, all services in the stack are updated. |
 | `prune` | `true` | no | Prune services that are no longer referenced by the stack file |
 | `teams` | _empty_ | no | Comma-separated list of Portainer team names for stack access control (e.g. `team1,team2`). If empty, the stack is restricted to administrators only. |
 | `running-check` | `true` | no | After deploy, wait until all stack tasks reach the `running` state |
@@ -32,7 +34,7 @@ Define the plugin as a step in your `.woodpecker.yaml` and provide settings unde
 | `log-level` | `info` | no | Logging level |
 | `skip-verify` | `false` | _optional_ | Skips the SSL verification. |
 
-\* Required only when the corresponding feature is enabled.
+\* Required only when the corresponding feature is enabled. `stack-path` is required for stack deploys, and optional for service-update mode.
 
 ## Examples
 
@@ -75,4 +77,21 @@ steps:
       health-check-url: https://example.com/whoami/healthz # Health check URL
       health-check-timeout: 2m # Health check bumped to 2 minute timeout 
       log-level: debug # Logging set to debug level
+```
+
+### Update services in an existing stack
+
+```yaml
+steps:
+  - name: refresh stack services
+    image: ghcr.io/dativa-lv/plugin-portainer-deploy
+    pull: true
+    settings:
+      server-url: http://portainer:9000
+      api-key:
+        from_secret: user-token-secret
+      skip-verify: true
+      server-environment: primary
+      stack-name: whoami
+      service-name: whoami_app
 ```
