@@ -32,10 +32,6 @@ func (p *Plugin) Validate() error {
 		return errors.New("stack name is required")
 	}
 
-	if p.Settings.StackPath == "" {
-		return errors.New("stack file path is required")
-	}
-
 	if p.Settings.RunningCheck {
 		if p.Settings.RunningTimeout == "" {
 			return errors.New("running-check-timeout is required when running-check is enabled")
@@ -94,6 +90,7 @@ func (p *Plugin) Execute(ctx context.Context) error {
 		ServerEnvironment:  p.Settings.ServerEnvironment,
 		StackName:          p.Settings.StackName,
 		StackPath:          p.Settings.StackPath,
+		ServiceName:        p.Settings.ServiceName,
 		Prune:              p.Settings.Prune,
 		Teams:              teams,
 		RunningCheck:       p.Settings.RunningCheck,
@@ -115,6 +112,14 @@ func (p *Plugin) Execute(ctx context.Context) error {
 		return fmt.Errorf("failed to get endpoint ID for endpoint name %s: %w", p.Settings.ServerEnvironment, err)
 	}
 
+	if p.Settings.StackPath == "" {
+		if err := client.UpdateStackServices(ctx, endpointID); err != nil {
+			return fmt.Errorf("failed to update services for stack %s: %w", p.Settings.StackName, err)
+		}
+
+		return p.runPostUpdateChecks(ctx, client, endpointID, "Services updated")
+	}
+
 	swarmID, err := client.GetSwarmID(ctx, endpointID)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster ID for endpoint ID %d: %w", endpointID, err)
@@ -131,24 +136,42 @@ func (p *Plugin) Execute(ctx context.Context) error {
 
 	log.Info().Msgf("Successfully set %v teams to %s stack.\n", p.Settings.Teams, p.Settings.StackName)
 
-	if p.Settings.RunningCheck {
-		timeout, _ := time.ParseDuration(p.Settings.RunningTimeout)
-		log.Info().Msgf("Stack deployed; waiting for stack %s to be Running (timeout: %s)...", p.Settings.StackName, timeout)
+	return p.runPostUpdateChecks(ctx, client, endpointID, "Stack deployed")
+}
 
-		err := client.WaitForStackRunning(ctx, endpointID, timeout)
-		if err != nil {
-			return fmt.Errorf("running check failed: %w", err)
+func (p *Plugin) runPostUpdateChecks(ctx context.Context, client *Client, endpointID int, prefix string) error {
+	if p.Settings.RunningCheck {
+		if err := p.runRunningCheck(ctx, client, endpointID, prefix); err != nil {
+			return err
 		}
 	}
 
 	if p.Settings.HealthCheck {
-		timeout, _ := time.ParseDuration(p.Settings.HealthCheckTimeout)
-		log.Info().Msgf("Stack %s is Running; checking service health at %s (timeout: %s)...", p.Settings.StackName, p.Settings.HealthCheckURL, timeout)
-
-		err := client.CheckHealth(ctx, p.Settings.HealthCheckURL, timeout)
-		if err != nil {
-			return fmt.Errorf("health check failed: %w", err)
+		if err := p.runHealthCheck(ctx, client, prefix); err != nil {
+			return err
 		}
+	}
+
+	return nil
+}
+
+func (p *Plugin) runRunningCheck(ctx context.Context, client *Client, endpointID int, prefix string) error {
+	timeout, _ := time.ParseDuration(p.Settings.RunningTimeout)
+	log.Info().Msgf("%s; waiting for stack %s to be Running (timeout: %s)...", prefix, p.Settings.StackName, timeout)
+
+	if err := client.WaitForStackRunning(ctx, endpointID, timeout); err != nil {
+		return fmt.Errorf("running check failed: %w", err)
+	}
+
+	return nil
+}
+
+func (p *Plugin) runHealthCheck(ctx context.Context, client *Client, prefix string) error {
+	timeout, _ := time.ParseDuration(p.Settings.HealthCheckTimeout)
+	log.Info().Msgf("%s; checking service health at %s (timeout: %s)...", prefix, p.Settings.HealthCheckURL, timeout)
+
+	if err := client.CheckHealth(ctx, p.Settings.HealthCheckURL, timeout); err != nil {
+		return fmt.Errorf("health check failed: %w", err)
 	}
 
 	return nil

@@ -18,6 +18,7 @@ type Settings struct {
 	ServerEnvironment  string
 	StackName          string
 	StackPath          string
+	ServiceName        string
 	Prune              bool
 	Teams              string
 	RunningCheck       bool
@@ -88,8 +89,14 @@ func (p *Plugin) Flags() []cli.Flag {
 		&cli.StringFlag{
 			Name:        "stack-path",
 			Sources:     cli.EnvVars("PLUGIN_STACK_PATH"),
-			Usage:       "Stack YAML filename",
+			Usage:       "Stack YAML filename (optional when updating stack services)",
 			Destination: &p.Settings.StackPath,
+		},
+		&cli.StringFlag{
+			Name:        "service-name",
+			Sources:     cli.EnvVars("PLUGIN_SERVICE_NAME"),
+			Usage:       "Optional service name to update within the stack",
+			Destination: &p.Settings.ServiceName,
 		},
 		&cli.BoolFlag{
 			Name:        "prune",
