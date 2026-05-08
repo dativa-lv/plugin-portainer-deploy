@@ -116,6 +116,7 @@ func (p *Plugin) Execute(ctx context.Context) error {
 		if err := client.UpdateStackServices(ctx, endpointID); err != nil {
 			return fmt.Errorf("failed to update services for stack %s: %w", p.Settings.StackName, err)
 		}
+
 		return p.runPostUpdateChecks(ctx, client, endpointID, "Services updated")
 	}
 

@@ -480,126 +480,6 @@ func (c *Client) UpdateResourceControl(ctx context.Context, stackID int) (string
 	return "", nil
 }
 
-// UpdateStackServices forces services in a stack to pull the latest image versions.
-func (c *Client) UpdateStackServices(ctx context.Context, endpointID int) error {
-	services, err := c.getStackServices(ctx, endpointID)
-	if err != nil {
-		return fmt.Errorf("failed to list services for stack %s: %w", c.StackName, err)
-	}
-
-	selected := c.filterServicesByName(services)
-	if len(selected) == 0 {
-		if c.ServiceName != "" {
-			return fmt.Errorf("service %q not found in stack %s", c.ServiceName, c.StackName)
-		}
-
-		return fmt.Errorf("no services found for stack %s", c.StackName)
-	}
-
-	for _, service := range selected {
-		if err := c.forceUpdateService(ctx, endpointID, service.ID); err != nil {
-			return fmt.Errorf("failed to update service %s: %w", service.Spec.Name, err)
-		}
-
-		log.Info().Msgf("Successfully updated service %s", service.Spec.Name)
-	}
-
-	log.Info().Msgf("Successfully updated %d service(s) in stack %s", len(selected), c.StackName)
-
-	return nil
-}
-
-func (c *Client) getStackServices(ctx context.Context, endpointID int) ([]portainerService, error) {
-	filters := fmt.Sprintf(`{"label":["com.docker.stack.namespace=%s"]}`, c.StackName)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		fmt.Sprintf("%s/api/endpoints/%d/docker/v1.47/services?filters=%s", c.ServerURL, endpointID, url.QueryEscape(filters)), nil)
-	if err != nil {
-		return nil, fmt.Errorf(requestError+"%w", err)
-	}
-
-	log.Debug().Msgf("Request services uri: %s", req.URL.String())
-	req.Header.Set(apiKeyHeader, c.APIKey)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf(requestFailed+"%w", err)
-	}
-
-	defer resp.Body.Close() //nolint:errcheck
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-
-		return nil, fmt.Errorf(serverError+"status code %d, body: %s", resp.StatusCode, string(body))
-	}
-
-	var services []portainerService
-
-	err = json.NewDecoder(resp.Body).Decode(&services)
-	if err != nil {
-		return nil, fmt.Errorf(decodeError+"%w", err)
-	}
-
-	return services, nil
-}
-
-func (c *Client) filterServicesByName(services []portainerService) []portainerService {
-	target := strings.TrimSpace(c.ServiceName)
-	if target == "" {
-		return services
-	}
-
-	selected := make([]portainerService, 0, 1)
-	for _, service := range services {
-		if service.Spec.Name == target || strings.HasSuffix(service.Spec.Name, "_"+target) {
-			selected = append(selected, service)
-		}
-	}
-
-	return selected
-}
-
-func (c *Client) forceUpdateService(ctx context.Context, endpointID int, serviceID string) error {
-	payload := map[string]any{
-		"serviceID": serviceID,
-		"pullImage": true,
-	}
-
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut,
-		fmt.Sprintf("%s/api/endpoints/%d/forceupdateservice", c.ServerURL, endpointID), bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return fmt.Errorf(requestError+"%w", err)
-	}
-
-	log.Debug().Msgf("PUT service request uri: %s", req.URL.String())
-	req.Header.Set(apiKeyHeader, c.APIKey)
-	req.Header.Set(contentTypeHeader, contentTypeJSON)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf(requestFailed+"%w", err)
-	}
-
-	defer resp.Body.Close() //nolint:errcheck
-
-	responseBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("failed to force update service, status code: %d, response: %s", resp.StatusCode, string(responseBody))
-	}
-
-	return nil
-}
-
 // GetResourceID retrieves the ResourceControl ID for a given stack in Portainer.
 func (c *Client) GetResourceID(ctx context.Context, stackID int) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
@@ -824,6 +704,126 @@ func (c *Client) CheckHealth(ctx context.Context, healthURL string, timeout time
 	_, err := backoff.Retry(ctx, operation, backoff.WithMaxElapsedTime(timeout), backoff.WithBackOff(backoff.NewConstantBackOff(c.pollInterval)))
 
 	return err
+}
+
+// UpdateStackServices forces services in a stack to pull the latest image versions.
+func (c *Client) UpdateStackServices(ctx context.Context, endpointID int) error {
+	services, err := c.getStackServices(ctx, endpointID)
+	if err != nil {
+		return fmt.Errorf("failed to list services for stack %s: %w", c.StackName, err)
+	}
+
+	selected := c.filterServicesByName(services)
+	if len(selected) == 0 {
+		if c.ServiceName != "" {
+			return fmt.Errorf("service %q not found in stack %s", c.ServiceName, c.StackName)
+		}
+
+		return fmt.Errorf("no services found for stack %s", c.StackName)
+	}
+
+	for _, service := range selected {
+		if err := c.forceUpdateService(ctx, endpointID, service.ID); err != nil {
+			return fmt.Errorf("failed to update service %s: %w", service.Spec.Name, err)
+		}
+
+		log.Info().Msgf("Successfully updated service %s", service.Spec.Name)
+	}
+
+	log.Info().Msgf("Successfully updated %d service(s) in stack %s", len(selected), c.StackName)
+
+	return nil
+}
+
+func (c *Client) getStackServices(ctx context.Context, endpointID int) ([]portainerService, error) {
+	filters := fmt.Sprintf(`{"label":["com.docker.stack.namespace=%s"]}`, c.StackName)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		fmt.Sprintf("%s/api/endpoints/%d/docker/v1.47/services?filters=%s", c.ServerURL, endpointID, url.QueryEscape(filters)), nil)
+	if err != nil {
+		return nil, fmt.Errorf(requestError+"%w", err)
+	}
+
+	log.Debug().Msgf("Request services uri: %s", req.URL.String())
+	req.Header.Set(apiKeyHeader, c.APIKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf(requestFailed+"%w", err)
+	}
+
+	defer resp.Body.Close() //nolint:errcheck
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+
+		return nil, fmt.Errorf(serverError+"status code %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var services []portainerService
+
+	err = json.NewDecoder(resp.Body).Decode(&services)
+	if err != nil {
+		return nil, fmt.Errorf(decodeError+"%w", err)
+	}
+
+	return services, nil
+}
+
+func (c *Client) filterServicesByName(services []portainerService) []portainerService {
+	target := strings.TrimSpace(c.ServiceName)
+	if target == "" {
+		return services
+	}
+
+	selected := make([]portainerService, 0, 1)
+	for _, service := range services {
+		if service.Spec.Name == target || strings.HasSuffix(service.Spec.Name, "_"+target) {
+			selected = append(selected, service)
+		}
+	}
+
+	return selected
+}
+
+func (c *Client) forceUpdateService(ctx context.Context, endpointID int, serviceID string) error {
+	payload := map[string]any{
+		"serviceID": serviceID,
+		"pullImage": true,
+	}
+
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut,
+		fmt.Sprintf("%s/api/endpoints/%d/forceupdateservice", c.ServerURL, endpointID), bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return fmt.Errorf(requestError+"%w", err)
+	}
+
+	log.Debug().Msgf("PUT service request uri: %s", req.URL.String())
+	req.Header.Set(apiKeyHeader, c.APIKey)
+	req.Header.Set(contentTypeHeader, contentTypeJSON)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf(requestFailed+"%w", err)
+	}
+
+	defer resp.Body.Close() //nolint:errcheck
+
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("failed to force update service, status code: %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+
+	return nil
 }
 
 func (c *Client) stackEnv() []map[string]string {
