@@ -44,16 +44,49 @@ func TestClientWorkflow_Integration_HappyPath_AllChecksEnabled(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{}`))
 	})
+	mux.HandleFunc("/api/endpoints/1/docker/v1.47/services", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]portainerService{{
+			ID: "svc1",
+			Spec: struct {
+				Name string `json:"Name"`
+				Mode struct {
+					Replicated struct {
+						Replicas int64 `json:"Replicas"`
+					} `json:"Replicated"`
+				} `json:"Mode"`
+			}{
+				Name: "test-stack_app",
+				Mode: struct {
+					Replicated struct {
+						Replicas int64 `json:"Replicas"`
+					} `json:"Replicated"`
+				}{
+					Replicated: struct {
+						Replicas int64 `json:"Replicas"`
+					}{Replicas: 1},
+				},
+			},
+			UpdateStatus: struct {
+				State string `json:"State"`
+			}{State: "completed"},
+		}})
+	})
 	mux.HandleFunc("/api/endpoints/1/docker/tasks", func(w http.ResponseWriter, r *http.Request) {
 		if taskCalls.Add(1) < 2 {
-			_ = json.NewEncoder(w).Encode([]dockerTask{{Status: struct {
-				State string `json:"State"`
-			}{State: "pending"}}})
+			_ = json.NewEncoder(w).Encode([]dockerTask{{
+				ServiceID: "svc1",
+				Status: struct {
+					State string `json:"State"`
+				}{State: "pending"},
+			}})
 			return
 		}
-		_ = json.NewEncoder(w).Encode([]dockerTask{{Status: struct {
-			State string `json:"State"`
-		}{State: "running"}}})
+		_ = json.NewEncoder(w).Encode([]dockerTask{{
+			ServiceID: "svc1",
+			Status: struct {
+				State string `json:"State"`
+			}{State: "running"},
+		}})
 	})
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		if healthCalls.Add(1) < 2 {
@@ -110,9 +143,31 @@ func TestServiceUpdateWorkflow_Integration_WithChecksEnabled(t *testing.T) {
 		_ = json.NewEncoder(w).Encode([]portainerEndpoint{{ID: 1, Name: "prod"}})
 	})
 	mux.HandleFunc("/api/endpoints/1/docker/v1.47/services", func(w http.ResponseWriter, r *http.Request) {
-		svc1 := portainerService{ID: "svc-1"}
-		svc1.Spec.Name = "mystack_app"
-		_ = json.NewEncoder(w).Encode([]portainerService{svc1})
+		_ = json.NewEncoder(w).Encode([]portainerService{{
+			ID: "svc-1",
+			Spec: struct {
+				Name string `json:"Name"`
+				Mode struct {
+					Replicated struct {
+						Replicas int64 `json:"Replicas"`
+					} `json:"Replicated"`
+				} `json:"Mode"`
+			}{
+				Name: "mystack_app",
+				Mode: struct {
+					Replicated struct {
+						Replicas int64 `json:"Replicas"`
+					} `json:"Replicated"`
+				}{
+					Replicated: struct {
+						Replicas int64 `json:"Replicas"`
+					}{Replicas: 1},
+				},
+			},
+			UpdateStatus: struct {
+				State string `json:"State"`
+			}{State: "completed"},
+		}})
 	})
 	mux.HandleFunc("/api/endpoints/1/forceupdateservice", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -120,14 +175,20 @@ func TestServiceUpdateWorkflow_Integration_WithChecksEnabled(t *testing.T) {
 	})
 	mux.HandleFunc("/api/endpoints/1/docker/tasks", func(w http.ResponseWriter, r *http.Request) {
 		if taskCalls.Add(1) < 2 {
-			_ = json.NewEncoder(w).Encode([]dockerTask{{Status: struct {
-				State string `json:"State"`
-			}{State: "pending"}}})
+			_ = json.NewEncoder(w).Encode([]dockerTask{{
+				ServiceID: "svc-1",
+				Status: struct {
+					State string `json:"State"`
+				}{State: "pending"},
+			}})
 			return
 		}
-		_ = json.NewEncoder(w).Encode([]dockerTask{{Status: struct {
-			State string `json:"State"`
-		}{State: "running"}}})
+		_ = json.NewEncoder(w).Encode([]dockerTask{{
+			ServiceID: "svc-1",
+			Status: struct {
+				State string `json:"State"`
+			}{State: "running"},
+		}})
 	})
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		if healthCalls.Add(1) < 2 {

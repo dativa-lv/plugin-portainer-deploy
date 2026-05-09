@@ -88,7 +88,15 @@ type portainerService struct {
 	ID   string `json:"ID"`
 	Spec struct {
 		Name string `json:"Name"`
+		Mode struct {
+			Replicated struct {
+				Replicas int64 `json:"Replicas"`
+			} `json:"Replicated"`
+		} `json:"Mode"`
 	} `json:"Spec"`
+	UpdateStatus struct {
+		State string `json:"State"`
+	} `json:"UpdateStatus"`
 }
 
 // Set constants for...
@@ -597,6 +605,8 @@ func (c *Client) SendPutRequest(ctx context.Context, resourceID string, jsonData
 
 // dockerTask holds the subset of a Docker Swarm task response used for running-state checks.
 type dockerTask struct {
+	ServiceID string `json:"ServiceID"`
+
 	Status struct {
 		State string `json:"State"`
 	} `json:"Status"`
@@ -607,6 +617,13 @@ type dockerTask struct {
 // runs every 5 seconds.
 func (c *Client) WaitForStackRunning(ctx context.Context, endpointID int, timeout time.Duration) error {
 	operation := func() (struct{}, error) {
+		// Get services in the stack
+		services, err := c.getStackServices(ctx, endpointID)
+		if err != nil {
+			return struct{}{}, err
+		}
+
+		// Get all running tasks for the stack
 		filters := fmt.Sprintf(`{"label":["com.docker.stack.namespace=%s"],"desired-state":["running"]}`, c.StackName)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet,
@@ -638,13 +655,27 @@ func (c *Client) WaitForStackRunning(ctx context.Context, endpointID int, timeou
 			return struct{}{}, fmt.Errorf(decodeError+"%w", err)
 		}
 
-		if len(tasks) == 0 {
-			return struct{}{}, fmt.Errorf("no tasks found for stack %s, waiting for scheduler", c.StackName)
-		}
+		// Verify each service has desired replicas running and update is complete
+		for _, service := range services {
+			desiredReplicas := service.Spec.Mode.Replicated.Replicas
+			runningCount := int64(0)
 
-		for _, task := range tasks {
-			if task.Status.State != "running" {
-				return struct{}{}, fmt.Errorf("task state is %q for stack %s", task.Status.State, c.StackName)
+			for _, task := range tasks {
+				if task.ServiceID == service.ID && task.Status.State == "running" {
+					runningCount++
+				}
+			}
+
+			if runningCount < desiredReplicas {
+				return struct{}{}, fmt.Errorf(
+					"service %s: %d/%d replicas running",
+					service.Spec.Name, runningCount, desiredReplicas)
+			}
+
+			if service.UpdateStatus.State != "" && service.UpdateStatus.State != "completed" {
+				return struct{}{}, fmt.Errorf(
+					"service %s: update in progress (state: %s)",
+					service.Spec.Name, service.UpdateStatus.State)
 			}
 		}
 
