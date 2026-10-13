@@ -863,7 +863,7 @@ func (c *Client) stackEnv() []map[string]string {
 
 	if c.RunningCheck {
 		env = append(env,
-			map[string]string{"name": "RUNNING_CHECK", "value": "true"},
+			map[string]string{"name": "RUNNING_CHECK", "value": "true"}, //nolint:goconst
 			map[string]string{"name": "RUNNING_CHECK_TIMEOUT", "value": c.RunningTimeout},
 		)
 	}

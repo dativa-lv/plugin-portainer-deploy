@@ -10,6 +10,7 @@ linters:
     - godox
     - tagalign
     - exhaustruct
+    - exhaustruct_v5
     - depguard
     - wrapcheck
     - gochecknoinits
