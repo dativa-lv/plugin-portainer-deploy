@@ -459,6 +459,7 @@ func (c *Client) UpdateResourceControl(ctx context.Context, stackID int) (string
 	log.Debug().Msgf("Team IDs: %v", teamIDs)
 
 	var resourceControl ResourceControl
+
 	switch {
 	case c.Public:
 		resourceControl = ResourceControl{
