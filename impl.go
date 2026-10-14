@@ -32,6 +32,10 @@ func (p *Plugin) Validate() error {
 		return errors.New("stack name is required")
 	}
 
+	if p.Settings.Public && strings.TrimSpace(p.Settings.Teams) != "" {
+		return errors.New("public and teams cannot be used together")
+	}
+
 	if p.Settings.RunningCheck {
 		if p.Settings.RunningTimeout == "" {
 			return errors.New("running-check-timeout is required when running-check is enabled")
@@ -93,6 +97,7 @@ func (p *Plugin) Execute(ctx context.Context) error {
 		ServiceName:        p.Settings.ServiceName,
 		Prune:              p.Settings.Prune,
 		Teams:              teams,
+		Public:             p.Settings.Public,
 		RunningCheck:       p.Settings.RunningCheck,
 		RunningTimeout:     p.Settings.RunningTimeout,
 		HealthCheck:        p.Settings.HealthCheck,
@@ -134,7 +139,11 @@ func (p *Plugin) Execute(ctx context.Context) error {
 		return fmt.Errorf("failed to update resource control for stack %d: %w", stackID, err)
 	}
 
-	log.Info().Msgf("Successfully set %v teams to %s stack.\n", p.Settings.Teams, p.Settings.StackName)
+	if p.Settings.Public {
+		log.Info().Msgf("Successfully set %s stack to public.\n", p.Settings.StackName)
+	} else {
+		log.Info().Msgf("Successfully set %v teams to %s stack.\n", p.Settings.Teams, p.Settings.StackName)
+	}
 
 	return p.runPostUpdateChecks(ctx, client, endpointID, "Stack deployed")
 }

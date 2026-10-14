@@ -33,6 +33,7 @@ type Client struct {
 	ServiceName        string
 	Prune              bool
 	Teams              []string
+	Public             bool
 	RunningCheck       bool
 	RunningTimeout     string
 	HealthCheck        bool
@@ -137,6 +138,7 @@ func NewClient(plugin *Plugin, c Client) (*Client, error) {
 		APIKey:             c.APIKey,
 		Prune:              c.Prune,
 		Teams:              c.Teams,
+		Public:             c.Public,
 		RunningCheck:       c.RunningCheck,
 		RunningTimeout:     c.RunningTimeout,
 		HealthCheck:        c.HealthCheck,
@@ -457,14 +459,22 @@ func (c *Client) UpdateResourceControl(ctx context.Context, stackID int) (string
 	log.Debug().Msgf("Team IDs: %v", teamIDs)
 
 	var resourceControl ResourceControl
-	if len(teamIDs) > 0 {
+	switch {
+	case c.Public:
+		resourceControl = ResourceControl{
+			AdministratorsOnly: false,
+			Public:             true,
+			Restricted:         false,
+			Teams:              []int{},
+		}
+	case len(teamIDs) > 0:
 		resourceControl = ResourceControl{
 			AdministratorsOnly: false,
 			Public:             false,
 			Restricted:         true,
 			Teams:              ConvertToIntSlice(teamIDs),
 		}
-	} else {
+	default:
 		resourceControl = ResourceControl{
 			AdministratorsOnly: true,
 			Public:             false,
