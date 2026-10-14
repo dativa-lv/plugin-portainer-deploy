@@ -25,7 +25,8 @@ Define the plugin as a step in your `.woodpecker.yaml` and provide settings unde
 | `stack-path` | _none_ | no* | Path to the stack YAML file in the workspace. Leave empty to update services in the existing stack instead of redeploying the stack file. |
 | `service-name` | _empty_ | no | Optional service name to update within the stack. If empty, all services in the stack are updated. |
 | `prune` | `true` | no | Prune services that are no longer referenced by the stack file |
-| `teams` | _empty_ | no | Comma-separated list of Portainer team names for stack access control (e.g. `team1,team2`). If empty, the stack is restricted to administrators only. |
+| `teams` | _empty_ | no | Comma-separated list of Portainer team names for stack access control (e.g. `team1,team2`). If empty and `public` is not set, the stack is restricted to administrators only. |
+| `public` | `false` | no | Make the stack public (accessible to all users). Cannot be combined with `teams`. |
 | `running-check` | `true` | no | After deploy, wait until all stack tasks reach the `running` state |
 | `running-check-timeout` | `1m` | no* | Timeout for running check (Go duration, e.g. `2m`, `30s`). Required when `running-check` is enabled. |
 | `health-check` | `false` | no | After running-check succeeds, poll a health endpoint |

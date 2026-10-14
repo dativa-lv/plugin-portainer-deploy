@@ -21,6 +21,7 @@ type Settings struct {
 	ServiceName        string
 	Prune              bool
 	Teams              string
+	Public             bool
 	RunningCheck       bool
 	RunningTimeout     string
 	HealthCheck        bool
@@ -110,6 +111,12 @@ func (p *Plugin) Flags() []cli.Flag {
 			Sources:     cli.EnvVars("PLUGIN_TEAMS"),
 			Usage:       "Comma separated list of teams",
 			Destination: &p.Settings.Teams,
+		},
+		&cli.BoolFlag{
+			Name:        "public",
+			Sources:     cli.EnvVars("PLUGIN_PUBLIC"),
+			Usage:       "Make the stack public instead of restricting it to teams",
+			Destination: &p.Settings.Public,
 		},
 		&cli.BoolFlag{
 			Name:        "running-check",

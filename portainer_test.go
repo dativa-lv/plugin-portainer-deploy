@@ -539,6 +539,56 @@ func TestUpdateResourceControl_RestrictedWhenTeamsProvided(t *testing.T) {
 	}
 }
 
+func TestUpdateResourceControl_PublicWhenSet(t *testing.T) {
+	var seenPutBody []byte
+	calls := map[string]int{}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls[r.Method+" "+r.URL.Path]++
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/stacks/10":
+			_ = json.NewEncoder(w).Encode(portainerStackDetail{ID: 10, Name: "test-stack", ResourceControl: portainerResourceCtrl{ID: 99}})
+		case r.Method == http.MethodPut && r.URL.Path == "/api/resource_controls/99":
+			seenPutBody, _ = io.ReadAll(r.Body)
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.Client(), srv.URL, "prod")
+	c.Public = true
+	_, err := c.UpdateResourceControl(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if calls["GET /api/teams"] != 0 {
+		t.Fatalf("teams should not be looked up for a public stack: %#v", calls)
+	}
+
+	if !bytes.Contains(seenPutBody, []byte(`"public":true`)) || !bytes.Contains(seenPutBody, []byte(`"administratorsOnly":false`)) {
+		t.Fatalf("expected public=true and administratorsOnly=false, body=%s", string(seenPutBody))
+	}
+}
+
+func TestValidate_RejectsPublicWithTeams(t *testing.T) {
+	p := &Plugin{Settings: &Settings{
+		APIKey:            "key",
+		ServerURL:         "https://portainer.example",
+		ServerEnvironment: "prod",
+		StackName:         "mystack",
+		Public:            true,
+		Teams:             "team-a",
+	}}
+
+	if err := p.Validate(); err == nil {
+		t.Fatal("expected validation error when public and teams are both set")
+	}
+}
+
 // --- UpdateStackServices ---
 
 func TestUpdateStackServices_UpdatesAllServices(t *testing.T) {
