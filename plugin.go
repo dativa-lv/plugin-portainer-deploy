@@ -4,6 +4,7 @@ package plugin
 
 import (
 	"os"
+	"time"
 
 	"codeberg.org/woodpecker-plugins/go-plugin"
 	"github.com/joho/godotenv"
@@ -27,7 +28,18 @@ type Settings struct {
 	HealthCheck        bool
 	HealthCheckURL     string
 	HealthCheckTimeout string
+	JobTimeout         string
+	DeployTimeout      string
+
+	// Timeouts parsed by Validate.
+	runningTimeout     time.Duration
+	healthCheckTimeout time.Duration
+	jobTimeout         time.Duration
+	deployTimeout      time.Duration
 }
+
+// defaultDeployTimeout matches the deadline Portainer applies to an asynchronous stack deployment.
+const defaultDeployTimeout = 15 * time.Minute
 
 // Plugin implements provide the plugin.
 type Plugin struct {
@@ -151,6 +163,19 @@ func (p *Plugin) Flags() []cli.Flag {
 			Usage:       "Timeout for health check polling (e.g. 1m, 30s)",
 			Value:       "1m",
 			Destination: &p.Settings.HealthCheckTimeout,
+		},
+		&cli.StringFlag{
+			Name:        "job-timeout",
+			Sources:     cli.EnvVars("PLUGIN_JOB_TIMEOUT"),
+			Usage:       "Timeout for a job service to complete (Go duration, e.g. 5m); defaults to running-check-timeout",
+			Destination: &p.Settings.JobTimeout,
+		},
+		&cli.StringFlag{
+			Name:        "deploy-timeout",
+			Sources:     cli.EnvVars("PLUGIN_DEPLOY_TIMEOUT"),
+			Usage:       "Timeout for Portainer to finish deploying the stack (Go duration, e.g. 5m)",
+			Value:       defaultDeployTimeout.String(),
+			Destination: &p.Settings.DeployTimeout,
 		},
 	}
 }

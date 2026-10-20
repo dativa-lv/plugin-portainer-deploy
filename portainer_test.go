@@ -353,6 +353,15 @@ func TestValidate_AllowsChecksWithoutStackPath(t *testing.T) {
 	}
 }
 
+// replicatedService builds a replicated service as returned by the services API.
+func replicatedService(id, name string, replicas int64, updateState string) portainerService {
+	service := portainerService{ID: id}
+	service.Spec.Name = name
+	service.Spec.Mode.Replicated.Replicas = replicas
+	service.UpdateStatus.State = updateState
+	return service
+}
+
 // containsString is a simple helper to avoid importing strings in tests.
 func containsString(s, sub string) bool { return strings.Contains(s, sub) }
 
@@ -621,7 +630,7 @@ func TestUpdateStackServices_UpdatesAllServices(t *testing.T) {
 
 	c := newTestClient(t, srv.Client(), srv.URL, "prod")
 	c.StackName = "mystack"
-	if err := c.UpdateStackServices(context.Background(), 1); err != nil {
+	if err := c.UpdateStackServices(context.Background(), 1, true, time.Second); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(forceCalls) != 2 {
@@ -657,7 +666,7 @@ func TestUpdateStackServices_FiltersByServiceName(t *testing.T) {
 	c := newTestClient(t, srv.Client(), srv.URL, "prod")
 	c.StackName = "mystack"
 	c.ServiceName = "app"
-	if err := c.UpdateStackServices(context.Background(), 1); err != nil {
+	if err := c.UpdateStackServices(context.Background(), 1, true, time.Second); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(forceCalls) != 1 {
@@ -679,48 +688,20 @@ func TestWaitForStackRunning_EventuallyRunning(t *testing.T) {
 			if c > 1 {
 				state = "completed"
 			}
-			_ = json.NewEncoder(w).Encode([]portainerService{{
-				ID: "svc1",
-				Spec: struct {
-					Name string `json:"Name"`
-					Mode struct {
-						Replicated struct {
-							Replicas int64 `json:"Replicas"`
-						} `json:"Replicated"`
-					} `json:"Mode"`
-				}{
-					Name: "mystack_app",
-					Mode: struct {
-						Replicated struct {
-							Replicas int64 `json:"Replicas"`
-						} `json:"Replicated"`
-					}{
-						Replicated: struct {
-							Replicas int64 `json:"Replicas"`
-						}{Replicas: 1},
-					},
-				},
-				UpdateStatus: struct {
-					State string `json:"State"`
-				}{State: state},
-			}})
+			_ = json.NewEncoder(w).Encode([]portainerService{replicatedService("svc1", "mystack_app", 1, state)})
 			return
 		}
 		c := calls.Load()
 		if c < 2 {
 			_ = json.NewEncoder(w).Encode([]dockerTask{{
 				ServiceID: "svc1",
-				Status: struct {
-					State string `json:"State"`
-				}{State: "pending"},
+				Status:    dockerTaskStatus{State: "pending"},
 			}})
 			return
 		}
 		_ = json.NewEncoder(w).Encode([]dockerTask{{
 			ServiceID: "svc1",
-			Status: struct {
-				State string `json:"State"`
-			}{State: "running"},
+			Status:    dockerTaskStatus{State: "running"},
 		}})
 	}))
 	defer srv.Close()
@@ -735,38 +716,12 @@ func TestWaitForStackRunning_EventuallyRunning(t *testing.T) {
 func TestWaitForStackRunning_Timeout(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/services") {
-			_ = json.NewEncoder(w).Encode([]portainerService{{
-				ID: "svc1",
-				Spec: struct {
-					Name string `json:"Name"`
-					Mode struct {
-						Replicated struct {
-							Replicas int64 `json:"Replicas"`
-						} `json:"Replicated"`
-					} `json:"Mode"`
-				}{
-					Name: "mystack_app",
-					Mode: struct {
-						Replicated struct {
-							Replicas int64 `json:"Replicas"`
-						} `json:"Replicated"`
-					}{
-						Replicated: struct {
-							Replicas int64 `json:"Replicas"`
-						}{Replicas: 1},
-					},
-				},
-				UpdateStatus: struct {
-					State string `json:"State"`
-				}{State: "updating"},
-			}})
+			_ = json.NewEncoder(w).Encode([]portainerService{replicatedService("svc1", "mystack_app", 1, "updating")})
 			return
 		}
 		_ = json.NewEncoder(w).Encode([]dockerTask{{
 			ServiceID: "svc1",
-			Status: struct {
-				State string `json:"State"`
-			}{State: "pending"},
+			Status:    dockerTaskStatus{State: "pending"},
 		}})
 	}))
 	defer srv.Close()

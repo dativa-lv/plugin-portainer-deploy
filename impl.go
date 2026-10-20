@@ -11,8 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"codeberg.org/woodpecker-plugins/go-plugin"
 	"github.com/rs/zerolog/log"
 )
+
+// logGroup starts a collapsible output group in the Woodpecker web UI.
+func logGroup(title string) {
+	fmt.Println(plugin.LogGroupMarker + title) //nolint:forbidigo // group markers must be printed as plain lines
+}
 
 // Validate handles the settings validation of the plugin.
 func (p *Plugin) Validate() error {
@@ -36,15 +42,8 @@ func (p *Plugin) Validate() error {
 		return errors.New("public and teams cannot be used together")
 	}
 
-	if p.Settings.RunningCheck {
-		if p.Settings.RunningTimeout == "" {
-			return errors.New("running-check-timeout is required when running-check is enabled")
-		}
-
-		_, err := time.ParseDuration(p.Settings.RunningTimeout)
-		if err != nil {
-			return fmt.Errorf("invalid running-check-timeout %q: %w", p.Settings.RunningTimeout, err)
-		}
+	if err := p.parseTimeouts(); err != nil {
+		return err
 	}
 
 	if p.Settings.HealthCheck {
@@ -52,6 +51,59 @@ func (p *Plugin) Validate() error {
 	}
 
 	return nil
+}
+
+// parseTimeouts validates the timeout settings and stores them as durations. For all timeouts,
+// zero means no limit.
+func (p *Plugin) parseTimeouts() error {
+	if p.Settings.RunningCheck && p.Settings.RunningTimeout == "" {
+		return errors.New("running-check-timeout is required when running-check is enabled")
+	}
+
+	var err error
+
+	if p.Settings.RunningTimeout != "" {
+		p.Settings.runningTimeout, err = parseTimeout("running-check-timeout", p.Settings.RunningTimeout)
+		if err != nil {
+			return err
+		}
+	}
+
+	// job-timeout defaults to running-check-timeout. It is validated even without the running check,
+	// where it is not used, so that enabling the running check does not reveal a bad value.
+	p.Settings.jobTimeout = p.Settings.runningTimeout
+
+	if p.Settings.JobTimeout != "" {
+		p.Settings.jobTimeout, err = parseTimeout("job-timeout", p.Settings.JobTimeout)
+		if err != nil {
+			return err
+		}
+	}
+
+	p.Settings.deployTimeout = defaultDeployTimeout
+
+	if p.Settings.DeployTimeout != "" {
+		p.Settings.deployTimeout, err = parseTimeout("deploy-timeout", p.Settings.DeployTimeout)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// parseTimeout parses a timeout setting: a Go duration that is not negative, where zero means no limit.
+func parseTimeout(name, value string) (time.Duration, error) {
+	timeout, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s %q: %w", name, value, err)
+	}
+
+	if timeout < 0 {
+		return 0, fmt.Errorf("invalid %s %q: must not be negative", name, value)
+	}
+
+	return timeout, nil
 }
 
 func (p *Plugin) validateHealthCheck() error {
@@ -64,12 +116,9 @@ func (p *Plugin) validateHealthCheck() error {
 		return fmt.Errorf("health-check-url must be a full URL, got %q", p.Settings.HealthCheckURL)
 	}
 
-	_, err = time.ParseDuration(p.Settings.HealthCheckTimeout)
-	if err != nil {
-		return fmt.Errorf("invalid health-check-timeout %q: %w", p.Settings.HealthCheckTimeout, err)
-	}
+	p.Settings.healthCheckTimeout, err = parseTimeout("health-check-timeout", p.Settings.HealthCheckTimeout)
 
-	return nil
+	return err
 }
 
 // Execute performs the main functionality of the Plugin.
@@ -89,20 +138,19 @@ func (p *Plugin) Execute(ctx context.Context) error {
 
 	// Prepare the client configuration
 	config := Client{
-		APIKey:             p.Settings.APIKey,
-		ServerURL:          p.Settings.ServerURL,
-		ServerEnvironment:  p.Settings.ServerEnvironment,
-		StackName:          p.Settings.StackName,
-		StackPath:          p.Settings.StackPath,
-		ServiceName:        p.Settings.ServiceName,
-		Prune:              p.Settings.Prune,
-		Teams:              teams,
-		Public:             p.Settings.Public,
-		RunningCheck:       p.Settings.RunningCheck,
-		RunningTimeout:     p.Settings.RunningTimeout,
-		HealthCheck:        p.Settings.HealthCheck,
-		HealthCheckURL:     p.Settings.HealthCheckURL,
-		HealthCheckTimeout: p.Settings.HealthCheckTimeout,
+		APIKey:            p.Settings.APIKey,
+		ServerURL:         p.Settings.ServerURL,
+		ServerEnvironment: p.Settings.ServerEnvironment,
+		StackName:         p.Settings.StackName,
+		StackPath:         p.Settings.StackPath,
+		ServiceName:       p.Settings.ServiceName,
+		Prune:             p.Settings.Prune,
+		Teams:             teams,
+		Public:            p.Settings.Public,
+		RunningCheck:      p.Settings.RunningCheck,
+		RunningTimeout:    p.Settings.RunningTimeout,
+		HealthCheck:       p.Settings.HealthCheck,
+		HealthCheckURL:    p.Settings.HealthCheckURL,
 	}
 
 	// Initialize Portainer client
@@ -111,6 +159,8 @@ func (p *Plugin) Execute(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize client: %w", err)
 	}
 
+	logGroup("Connect to Portainer environment " + p.Settings.ServerEnvironment)
+
 	// Retrieve endpoint ID by name
 	endpointID, err := client.GetEndpointID(ctx)
 	if err != nil {
@@ -118,7 +168,8 @@ func (p *Plugin) Execute(ctx context.Context) error {
 	}
 
 	if p.Settings.StackPath == "" {
-		if err := client.UpdateStackServices(ctx, endpointID); err != nil {
+		// Waiting for jobs is part of the running check, as in stack deploys.
+		if err := client.UpdateStackServices(ctx, endpointID, p.Settings.RunningCheck, p.Settings.jobTimeout); err != nil {
 			return fmt.Errorf("failed to update services for stack %s: %w", p.Settings.StackName, err)
 		}
 
@@ -128,6 +179,24 @@ func (p *Plugin) Execute(ctx context.Context) error {
 	swarmID, err := client.GetSwarmID(ctx, endpointID)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster ID for endpoint ID %d: %w", endpointID, err)
+	}
+
+	logGroup("Deploy stack " + p.Settings.StackName)
+
+	// Job iterations before the deploy tell which jobs the deploy started. Without them, jobs the
+	// deploy did not start could not be told apart, so the jobs are not checked. A stack file without
+	// jobs needs neither.
+	var jobIterations map[string]uint64
+
+	waitForJobs := p.Settings.RunningCheck && client.StackFileDeclaresJobs()
+
+	if waitForJobs {
+		jobIterations, err = client.StackJobIterations(ctx, endpointID)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to read job iterations before the deploy; job services will not be checked")
+
+			waitForJobs = false
+		}
 	}
 
 	stackID, err := client.CreateOrUpdateStack(ctx, endpointID, swarmID)
@@ -143,6 +212,17 @@ func (p *Plugin) Execute(ctx context.Context) error {
 		log.Info().Msgf("Successfully set %s stack to public.\n", p.Settings.StackName)
 	} else {
 		log.Info().Msgf("Successfully set %v teams to %s stack.\n", p.Settings.Teams, p.Settings.StackName)
+	}
+
+	if err := client.WaitForStackDeployment(ctx, stackID, p.Settings.deployTimeout); err != nil {
+		return fmt.Errorf("failed to deploy stack %s: %w", p.Settings.StackName, err)
+	}
+
+	if waitForJobs {
+		// Jobs get their own log groups.
+		if err := client.WaitForStackJobs(ctx, endpointID, jobIterations, p.Settings.jobTimeout); err != nil {
+			return fmt.Errorf("running check failed: %w", err)
+		}
 	}
 
 	return p.runPostUpdateChecks(ctx, client, endpointID, "Stack deployed")
@@ -165,10 +245,11 @@ func (p *Plugin) runPostUpdateChecks(ctx context.Context, client *Client, endpoi
 }
 
 func (p *Plugin) runRunningCheck(ctx context.Context, client *Client, endpointID int, prefix string) error {
-	timeout, _ := time.ParseDuration(p.Settings.RunningTimeout)
-	log.Info().Msgf("%s; waiting for stack %s to be Running (timeout: %s)...", prefix, p.Settings.StackName, timeout)
+	logGroup("Running check")
 
-	if err := client.WaitForStackRunning(ctx, endpointID, timeout); err != nil {
+	log.Info().Msgf("%s; waiting for stack %s to be Running (timeout: %s)...", prefix, p.Settings.StackName, p.Settings.runningTimeout)
+
+	if err := client.WaitForStackRunning(ctx, endpointID, p.Settings.runningTimeout); err != nil {
 		return fmt.Errorf("running check failed: %w", err)
 	}
 
@@ -176,10 +257,11 @@ func (p *Plugin) runRunningCheck(ctx context.Context, client *Client, endpointID
 }
 
 func (p *Plugin) runHealthCheck(ctx context.Context, client *Client, prefix string) error {
-	timeout, _ := time.ParseDuration(p.Settings.HealthCheckTimeout)
-	log.Info().Msgf("%s; checking service health at %s (timeout: %s)...", prefix, p.Settings.HealthCheckURL, timeout)
+	logGroup("Health check")
 
-	if err := client.CheckHealth(ctx, p.Settings.HealthCheckURL, timeout); err != nil {
+	log.Info().Msgf("%s; checking service health at %s (timeout: %s)...", prefix, p.Settings.HealthCheckURL, p.Settings.healthCheckTimeout)
+
+	if err := client.CheckHealth(ctx, p.Settings.HealthCheckURL, p.Settings.healthCheckTimeout); err != nil {
 		return fmt.Errorf("health check failed: %w", err)
 	}
 
