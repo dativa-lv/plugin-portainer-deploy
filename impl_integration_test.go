@@ -45,47 +45,19 @@ func TestClientWorkflow_Integration_HappyPath_AllChecksEnabled(t *testing.T) {
 		w.Write([]byte(`{}`))
 	})
 	mux.HandleFunc("/api/endpoints/1/docker/v1.47/services", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode([]portainerService{{
-			ID: "svc1",
-			Spec: struct {
-				Name string `json:"Name"`
-				Mode struct {
-					Replicated struct {
-						Replicas int64 `json:"Replicas"`
-					} `json:"Replicated"`
-				} `json:"Mode"`
-			}{
-				Name: "test-stack_app",
-				Mode: struct {
-					Replicated struct {
-						Replicas int64 `json:"Replicas"`
-					} `json:"Replicated"`
-				}{
-					Replicated: struct {
-						Replicas int64 `json:"Replicas"`
-					}{Replicas: 1},
-				},
-			},
-			UpdateStatus: struct {
-				State string `json:"State"`
-			}{State: "completed"},
-		}})
+		_ = json.NewEncoder(w).Encode([]portainerService{replicatedService("svc1", "test-stack_app", 1, "completed")})
 	})
-	mux.HandleFunc("/api/endpoints/1/docker/tasks", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/endpoints/1/docker/v1.47/tasks", func(w http.ResponseWriter, r *http.Request) {
 		if taskCalls.Add(1) < 2 {
 			_ = json.NewEncoder(w).Encode([]dockerTask{{
 				ServiceID: "svc1",
-				Status: struct {
-					State string `json:"State"`
-				}{State: "pending"},
+				Status:    dockerTaskStatus{State: "pending"},
 			}})
 			return
 		}
 		_ = json.NewEncoder(w).Encode([]dockerTask{{
 			ServiceID: "svc1",
-			Status: struct {
-				State string `json:"State"`
-			}{State: "running"},
+			Status:    dockerTaskStatus{State: "running"},
 		}})
 	})
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -108,7 +80,6 @@ func TestClientWorkflow_Integration_HappyPath_AllChecksEnabled(t *testing.T) {
 	c.RunningTimeout = "200ms"
 	c.HealthCheck = true
 	c.HealthCheckURL = srv.URL + "/health"
-	c.HealthCheckTimeout = "200ms"
 
 	ctx := context.Background()
 	endpointID, err := c.GetEndpointID(ctx)
@@ -143,51 +114,23 @@ func TestServiceUpdateWorkflow_Integration_WithChecksEnabled(t *testing.T) {
 		_ = json.NewEncoder(w).Encode([]portainerEndpoint{{ID: 1, Name: "prod"}})
 	})
 	mux.HandleFunc("/api/endpoints/1/docker/v1.47/services", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode([]portainerService{{
-			ID: "svc-1",
-			Spec: struct {
-				Name string `json:"Name"`
-				Mode struct {
-					Replicated struct {
-						Replicas int64 `json:"Replicas"`
-					} `json:"Replicated"`
-				} `json:"Mode"`
-			}{
-				Name: "mystack_app",
-				Mode: struct {
-					Replicated struct {
-						Replicas int64 `json:"Replicas"`
-					} `json:"Replicated"`
-				}{
-					Replicated: struct {
-						Replicas int64 `json:"Replicas"`
-					}{Replicas: 1},
-				},
-			},
-			UpdateStatus: struct {
-				State string `json:"State"`
-			}{State: "completed"},
-		}})
+		_ = json.NewEncoder(w).Encode([]portainerService{replicatedService("svc-1", "mystack_app", 1, "completed")})
 	})
 	mux.HandleFunc("/api/endpoints/1/forceupdateservice", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{}`))
 	})
-	mux.HandleFunc("/api/endpoints/1/docker/tasks", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/endpoints/1/docker/v1.47/tasks", func(w http.ResponseWriter, r *http.Request) {
 		if taskCalls.Add(1) < 2 {
 			_ = json.NewEncoder(w).Encode([]dockerTask{{
 				ServiceID: "svc-1",
-				Status: struct {
-					State string `json:"State"`
-				}{State: "pending"},
+				Status:    dockerTaskStatus{State: "pending"},
 			}})
 			return
 		}
 		_ = json.NewEncoder(w).Encode([]dockerTask{{
 			ServiceID: "svc-1",
-			Status: struct {
-				State string `json:"State"`
-			}{State: "running"},
+			Status:    dockerTaskStatus{State: "running"},
 		}})
 	})
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -224,11 +167,69 @@ func TestServiceUpdateWorkflow_Integration_WithChecksEnabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("endpoint: %v", err)
 	}
-	if err := c.UpdateStackServices(ctx, endpointID); err != nil {
+	if err := c.UpdateStackServices(ctx, endpointID, true, 500*time.Millisecond); err != nil {
 		t.Fatalf("service update: %v", err)
+	}
+	if err := p.Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
 	}
 	if err := p.runPostUpdateChecks(ctx, c, endpointID, "Services updated"); err != nil {
 		t.Fatalf("post-update checks: %v", err)
+	}
+}
+
+func TestServiceUpdateWorkflow_Integration_JobAndRegularService(t *testing.T) {
+	f := newFakeSwarm(t)
+	f.registries = []portainerRegistry{{ID: 3, Name: "zzdats", URL: "git.zzdats.lv"}}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/endpoints", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]portainerEndpoint{{ID: 1, Name: "prod"}})
+	})
+	mux.Handle("/api/endpoints/1/", f)
+	mux.Handle("/api/registries", f)
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	p := &Plugin{Settings: &Settings{
+		APIKey:            "test-key",
+		ServerURL:         srv.URL,
+		ServerEnvironment: "prod",
+		StackName:         "mystack",
+		RunningCheck:      true,
+		RunningTimeout:    "200ms",
+		JobTimeout:        "500ms",
+	}}
+
+	c := newTestClient(t, srv.Client(), srv.URL, "prod")
+	c.StackName = "mystack"
+	c.RunningCheck = true
+	c.RunningTimeout = "200ms"
+
+	ctx := context.Background()
+	endpointID, err := c.GetEndpointID(ctx)
+	if err != nil {
+		t.Fatalf("endpoint: %v", err)
+	}
+	if err := c.UpdateStackServices(ctx, endpointID, true, 500*time.Millisecond); err != nil {
+		t.Fatalf("service update: %v", err)
+	}
+	if err := p.Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if err := p.runPostUpdateChecks(ctx, c, endpointID, "Services updated"); err != nil {
+		t.Fatalf("post-update checks: %v", err)
+	}
+
+	if got := strings.Join(f.events, ","); got != "job-update,job-complete,force:svc-1" {
+		t.Fatalf("expected the job to complete before the app is updated, got %s", got)
+	}
+	if f.forceJobCalled.Load() {
+		t.Fatal("job must not be updated through forceupdateservice")
+	}
+	if f.updateAuth == "" {
+		t.Fatal("expected registry credentials for the job image")
 	}
 }
 
