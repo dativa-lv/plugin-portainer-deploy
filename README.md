@@ -11,6 +11,7 @@ Portainer Deploy Plugin for Woodpecker-CI supports GitOps workflows by deploying
 - Run Docker Swarm job services (`replicated-job`, `global-job`), such as database migrations, and wait for them to complete. When updating services without a stack file, jobs run before the other services
 - Fail the step when Portainer reports a stack deployment error
 - Optionally poll a service health endpoint after the stack is running
+- Check that every image referenced by stack files exists in its registry
 
 ## Configuration
 
@@ -38,6 +39,10 @@ Define the plugin as a step in your `.woodpecker.yaml` and provide settings unde
 | `deploy-timeout` | `15m` | no | Timeout for Portainer to finish deploying the stack (Go duration, e.g. `5m`; `0` means no limit). Only applies to Portainer versions that deploy stacks in the background. |
 | `log-level` | `info` | no | Logging level |
 | `skip-verify` | `false` | _optional_ | Skips the SSL verification. |
+| `check-images` | `false` | no | Fail if any image in the stack files does not exist|
+| `registry-hosts` | _empty_ | no | Comma-separated registry hosts that receive `registry-username`/`registry-password`. Other registries are checked anonymously. |
+| `registry-username` | _empty_ | no | Registry username for `check-images` |
+| `registry-password` | _empty_ | no | Registry password or token for `check-images` |
 
 \* Required only when the corresponding feature is enabled. `stack-path` is required for stack deploys, and optional for service-update mode.
 
@@ -99,6 +104,24 @@ steps:
       server-environment: primary
       stack-name: whoami
       service-name: whoami_app
+```
+
+### Check stack images on pull requests
+
+```yaml
+steps:
+  - name: check images
+    image: ghcr.io/dativa-lv/plugin-portainer-deploy
+    pull: true
+    settings:
+      check-images: true 
+      registry-hosts: registry.example.com
+      registry-username:
+        from_secret: registry_username
+      registry-password:
+        from_secret: registry_password
+    when:
+      - event: pull_request
 ```
 
 ## Job services

@@ -30,6 +30,10 @@ type Settings struct {
 	HealthCheckTimeout string
 	JobTimeout         string
 	DeployTimeout      string
+	CheckImages        bool
+	RegistryHosts      []string
+	RegistryUsername   string
+	RegistryPassword   string
 
 	// Timeouts parsed by Validate.
 	runningTimeout     time.Duration
@@ -176,6 +180,30 @@ func (p *Plugin) Flags() []cli.Flag {
 			Usage:       "Timeout for Portainer to finish deploying the stack (Go duration, e.g. 5m)",
 			Value:       defaultDeployTimeout.String(),
 			Destination: &p.Settings.DeployTimeout,
+		},
+		&cli.BoolFlag{
+			Name:        "check-images",
+			Sources:     cli.EnvVars("PLUGIN_CHECK_IMAGES"),
+			Usage:       "Only check that every image in the stack files matching stack-path (glob) exists; Portainer is not contacted",
+			Destination: &p.Settings.CheckImages,
+		},
+		&cli.StringSliceFlag{
+			Name:        "registry-hosts",
+			Sources:     cli.EnvVars("PLUGIN_REGISTRY_HOSTS"),
+			Usage:       "Registry hosts that get registry-username/registry-password in check-images mode; other registries are queried anonymously",
+			Destination: &p.Settings.RegistryHosts,
+		},
+		&cli.StringFlag{
+			Name:        "registry-username",
+			Sources:     cli.EnvVars("PLUGIN_REGISTRY_USERNAME"),
+			Usage:       "Registry username for check-images",
+			Destination: &p.Settings.RegistryUsername,
+		},
+		&cli.StringFlag{
+			Name:        "registry-password",
+			Sources:     cli.EnvVars("PLUGIN_REGISTRY_PASSWORD"),
+			Usage:       "Registry password or token for check-images",
+			Destination: &p.Settings.RegistryPassword,
 		},
 	}
 }

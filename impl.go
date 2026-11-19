@@ -22,6 +22,10 @@ func logGroup(title string) {
 
 // Validate handles the settings validation of the plugin.
 func (p *Plugin) Validate() error {
+	if p.Settings.CheckImages {
+		return nil
+	}
+
 	if p.Settings.APIKey == "" {
 		return errors.New("you must provide an API key")
 	}
@@ -125,6 +129,10 @@ func (p *Plugin) validateHealthCheck() error {
 func (p *Plugin) Execute(ctx context.Context) error {
 	if err := p.Validate(); err != nil {
 		return err
+	}
+
+	if p.Settings.CheckImages {
+		return p.checkImages(ctx)
 	}
 
 	// Parse Teams once here so the client receives a clean []string.
