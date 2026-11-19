@@ -55,7 +55,7 @@ func (p *Plugin) checkImages(ctx context.Context) error {
 	return checker.check(ctx, images)
 }
 
-// stackFiles returns every .yaml/.yml file not in dot-directories e.g. .git
+// stackFiles returns every .yaml/.yml file not in dot-directories, e.g. .git.
 func stackFiles(pattern string) ([]string, error) {
 	if pattern != "" {
 		return filepath.Glob(pattern)
@@ -93,7 +93,7 @@ func stackImages(pattern string) ([]string, error) {
 	seen := map[string]struct{}{}
 
 	for _, file := range files {
-		data, err := os.ReadFile(file)
+		data, err := os.ReadFile(file) //nolint:gosec // G304: the paths come from the pipeline's own workspace
 		if err != nil {
 			return nil, fmt.Errorf("failed to read %s: %w", file, err)
 		}
