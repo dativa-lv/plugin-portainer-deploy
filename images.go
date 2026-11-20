@@ -98,15 +98,16 @@ func stackImages(pattern string) ([]string, error) {
 			return nil, fmt.Errorf("failed to read %s: %w", file, err)
 		}
 
-		var stack stackFile
-		if err := yaml.Unmarshal(data, &stack); err != nil {
-			if typeErr := (*yaml.TypeError)(nil); errors.As(err, &typeErr) {
-				log.Warn().Msgf("skipping %s: not a stack file: %v", file, err)
-
-				continue
-			}
-
+		doc, err := lintYAML(data)
+		if err != nil {
 			return nil, fmt.Errorf("invalid YAML in %s: %w", file, err)
+		}
+
+		var stack stackFile
+		if err := doc.Decode(&stack); err != nil {
+			log.Warn().Msgf("skipping %s: not a stack file: %v", file, err)
+
+			continue
 		}
 
 		for _, svc := range stack.Services {
@@ -117,6 +118,42 @@ func stackImages(pattern string) ([]string, error) {
 	}
 
 	return slices.Sorted(maps.Keys(seen)), nil
+}
+
+// lintYAML parses data and fails on what yamllint's relaxed preset treats as errors:
+// syntax errors, undeclared aliases and duplicate mapping keys.
+// ponytail: first document only, stack files are single-document.
+func lintYAML(data []byte) (*yaml.Node, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, err
+	}
+
+	return &doc, duplicateKey(&doc)
+}
+
+// duplicateKey returns an error for the first mapping that repeats a key; merge keys (<<) may repeat.
+func duplicateKey(n *yaml.Node) error {
+	if n.Kind == yaml.MappingNode {
+		seen := map[string]int{}
+
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			key := n.Content[i]
+			if line, ok := seen[key.Value]; ok && key.Value != "<<" {
+				return fmt.Errorf("line %d: duplicate key %q, first defined at line %d", key.Line, key.Value, line)
+			}
+
+			seen[key.Value] = key.Line
+		}
+	}
+
+	for _, child := range n.Content {
+		if err := duplicateKey(child); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // check looks up every image's manifest and returns an error listing the ones that failed.

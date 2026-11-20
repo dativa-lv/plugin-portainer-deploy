@@ -210,6 +210,39 @@ func TestStackImages(t *testing.T) {
 		}
 	})
 
+	t.Run("duplicate key fails and names the file", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFiles(t, dir, map[string]string{
+			"dev/dup.yaml": "services:\n  web:\n    image: x\n    image: y\n",
+		})
+
+		_, err := stackImages(filepath.Join(dir, "*", "*.yaml"))
+		if err == nil || !strings.Contains(err.Error(), "dup.yaml") || !strings.Contains(err.Error(), "duplicate key") {
+			t.Errorf("want duplicate key error naming dup.yaml, got %v", err)
+		}
+	})
+
+	t.Run("undeclared alias fails", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFiles(t, dir, map[string]string{"dev/alias.yaml": "services:\n  web: *missing\n"})
+
+		if _, err := stackImages(filepath.Join(dir, "*", "*.yaml")); err == nil {
+			t.Error("want error, got nil")
+		}
+	})
+
+	t.Run("repeated merge keys and empty files pass", func(t *testing.T) {
+		dir := t.TempDir()
+		writeFiles(t, dir, map[string]string{
+			"dev/merge.yaml": "x: &a {k: 1}\ny: &b {l: 2}\nservices:\n  web:\n    <<: *a\n    <<: *b\n    image: example.com/web:1\n",
+			"dev/empty.yaml": "",
+		})
+
+		if _, err := stackImages(filepath.Join(dir, "*", "*.yaml")); err != nil {
+			t.Errorf("want no error, got %v", err)
+		}
+	})
+
 	t.Run("no matching files fails", func(t *testing.T) {
 		if _, err := stackImages(filepath.Join(t.TempDir(), "*.yaml")); err == nil {
 			t.Error("want error, got nil")

@@ -39,7 +39,7 @@ Define the plugin as a step in your `.woodpecker.yaml` and provide settings unde
 | `deploy-timeout` | `15m` | no | Timeout for Portainer to finish deploying the stack (Go duration, e.g. `5m`; `0` means no limit). Only applies to Portainer versions that deploy stacks in the background. |
 | `log-level` | `info` | no | Logging level |
 | `skip-verify` | `false` | _optional_ | Skips the SSL verification. |
-| `check-images` | `false` | no | Fail if any image in the stack files does not exist|
+| `check-images` | `false` | no | Lint the stack files (YAML syntax, duplicate keys, undeclared aliases) and fail if any of their images does not exist |
 | `registry-hosts` | _empty_ | no | Comma-separated registry hosts that receive `registry-username`/`registry-password`. Other registries are checked anonymously. |
 | `registry-username` | _empty_ | no | Registry username for `check-images` |
 | `registry-password` | _empty_ | no | Registry password or token for `check-images` |
@@ -106,7 +106,7 @@ steps:
       service-name: whoami_app
 ```
 
-### Check stack images on pull requests
+### Lint stack files and check their images on pull requests
 
 ```yaml
 steps:

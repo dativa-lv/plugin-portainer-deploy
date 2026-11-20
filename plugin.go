@@ -184,7 +184,7 @@ func (p *Plugin) Flags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:        "check-images",
 			Sources:     cli.EnvVars("PLUGIN_CHECK_IMAGES"),
-			Usage:       "Only check that every image in the stack files matching stack-path (glob) exists; Portainer is not contacted",
+			Usage:       "Only lint the stack files matching stack-path (glob) and check that every image in them exists; Portainer is not contacted",
 			Destination: &p.Settings.CheckImages,
 		},
 		&cli.StringSliceFlag{
