@@ -98,13 +98,13 @@ func stackImages(pattern string) ([]string, error) {
 			return nil, fmt.Errorf("failed to read %s: %w", file, err)
 		}
 
-		doc, err := lintYAML(data)
-		if err != nil {
+		// yaml.v3 reports syntax errors,
+		if err := yaml.Unmarshal(data, new(any)); err != nil {
 			return nil, fmt.Errorf("invalid YAML in %s: %w", file, err)
 		}
 
 		var stack stackFile
-		if err := doc.Decode(&stack); err != nil {
+		if err := yaml.Unmarshal(data, &stack); err != nil {
 			log.Warn().Msgf("skipping %s: not a stack file: %v", file, err)
 
 			continue
@@ -120,55 +120,12 @@ func stackImages(pattern string) ([]string, error) {
 	return slices.Sorted(maps.Keys(seen)), nil
 }
 
-// lintYAML parses data and fails on what yamllint's relaxed preset treats as errors.
-func lintYAML(data []byte) (*yaml.Node, error) {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return nil, err
-	}
-
-	return &doc, duplicateKey(&doc)
-}
-
-// duplicateKey returns an error for the first mapping in the tree that repeats a key.
-func duplicateKey(n *yaml.Node) error {
-	if n.Kind == yaml.MappingNode {
-		if err := uniqueKeys(n); err != nil {
-			return err
-		}
-	}
-
-	for _, child := range n.Content {
-		if err := duplicateKey(child); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// uniqueKeys returns an error if the mapping defines a key twice.
-func uniqueKeys(mapping *yaml.Node) error {
-	firstLine := map[string]int{}
-
-	for pair := range slices.Chunk(mapping.Content, 2) {
-		key := pair[0]
-		if line, seen := firstLine[key.Value]; seen {
-			return fmt.Errorf("line %d: duplicate key %q, first defined at line %d", key.Line, key.Value, line)
-		}
-
-		firstLine[key.Value] = key.Line
-	}
-
-	return nil
-}
-
 // check looks up every image's manifest and returns an error listing the ones that failed.
 func (c imageChecker) check(ctx context.Context, images []string) error {
 	var failed []string
 
 	for _, image := range images {
-		if strings.Contains(image, "${") {
+		if strings.Contains(image, "$") {
 			log.Warn().Msgf("Image %s skipped: contains a variable", image)
 
 			continue

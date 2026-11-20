@@ -132,6 +132,8 @@ func (p *Plugin) Execute(ctx context.Context) error {
 	}
 
 	if p.Settings.CheckImages {
+		log.Info().Msg("check-images: only linting stack files and checking images")
+
 		return p.checkImages(ctx)
 	}
 

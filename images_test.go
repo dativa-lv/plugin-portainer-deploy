@@ -92,6 +92,7 @@ func TestImageChecker(t *testing.T) {
 			privateRegistry.image(existingImage),
 			publicRegistry.image(existingImage),
 			"${REGISTRY}/" + existingImage,
+			"$REGISTRY/" + existingImage,
 		}
 
 		if err := checker.check(t.Context(), images); err != nil {
@@ -217,7 +218,7 @@ func TestStackImages(t *testing.T) {
 		})
 
 		_, err := stackImages(filepath.Join(dir, "*", "*.yaml"))
-		if err == nil || !strings.Contains(err.Error(), "dup.yaml") || !strings.Contains(err.Error(), "duplicate key") {
+		if err == nil || !strings.Contains(err.Error(), "dup.yaml") || !strings.Contains(err.Error(), "already defined") {
 			t.Errorf("want duplicate key error naming dup.yaml, got %v", err)
 		}
 	})
