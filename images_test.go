@@ -231,15 +231,16 @@ func TestStackImages(t *testing.T) {
 		}
 	})
 
-	t.Run("repeated merge keys and empty files pass", func(t *testing.T) {
+	t.Run("merge keys and empty files pass", func(t *testing.T) {
 		dir := t.TempDir()
 		writeFiles(t, dir, map[string]string{
-			"dev/merge.yaml": "x: &a {k: 1}\ny: &b {l: 2}\nservices:\n  web:\n    <<: *a\n    <<: *b\n    image: example.com/web:1\n",
+			"dev/merge.yaml": "x: &a {k: 1}\ny: &b {l: 2}\nservices:\n  web:\n    <<: [*a, *b]\n    image: example.com/web:1\n",
 			"dev/empty.yaml": "",
 		})
 
-		if _, err := stackImages(filepath.Join(dir, "*", "*.yaml")); err != nil {
-			t.Errorf("want no error, got %v", err)
+		images, err := stackImages(filepath.Join(dir, "*", "*.yaml"))
+		if err != nil || strings.Join(images, ",") != "example.com/web:1" {
+			t.Errorf("want [example.com/web:1], got %v, %v", images, err)
 		}
 	})
 

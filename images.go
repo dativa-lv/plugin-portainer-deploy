@@ -120,9 +120,7 @@ func stackImages(pattern string) ([]string, error) {
 	return slices.Sorted(maps.Keys(seen)), nil
 }
 
-// lintYAML parses data and fails on what yamllint's relaxed preset treats as errors:
-// syntax errors, undeclared aliases and duplicate mapping keys.
-// ponytail: first document only, stack files are single-document.
+// lintYAML parses data and fails on what yamllint's relaxed preset treats as errors.
 func lintYAML(data []byte) (*yaml.Node, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(data, &doc); err != nil {
@@ -132,18 +130,11 @@ func lintYAML(data []byte) (*yaml.Node, error) {
 	return &doc, duplicateKey(&doc)
 }
 
-// duplicateKey returns an error for the first mapping that repeats a key; merge keys (<<) may repeat.
+// duplicateKey returns an error for the first mapping in the tree that repeats a key.
 func duplicateKey(n *yaml.Node) error {
 	if n.Kind == yaml.MappingNode {
-		seen := map[string]int{}
-
-		for i := 0; i+1 < len(n.Content); i += 2 {
-			key := n.Content[i]
-			if line, ok := seen[key.Value]; ok && key.Value != "<<" {
-				return fmt.Errorf("line %d: duplicate key %q, first defined at line %d", key.Line, key.Value, line)
-			}
-
-			seen[key.Value] = key.Line
+		if err := uniqueKeys(n); err != nil {
+			return err
 		}
 	}
 
@@ -151,6 +142,22 @@ func duplicateKey(n *yaml.Node) error {
 		if err := duplicateKey(child); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// uniqueKeys returns an error if the mapping defines a key twice.
+func uniqueKeys(mapping *yaml.Node) error {
+	firstLine := map[string]int{}
+
+	for pair := range slices.Chunk(mapping.Content, 2) {
+		key := pair[0]
+		if line, seen := firstLine[key.Value]; seen {
+			return fmt.Errorf("line %d: duplicate key %q, first defined at line %d", key.Line, key.Value, line)
+		}
+
+		firstLine[key.Value] = key.Line
 	}
 
 	return nil
