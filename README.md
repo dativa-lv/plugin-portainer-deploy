@@ -110,7 +110,7 @@ steps:
 
 ```yaml
 steps:
-  - name: check images
+  - name: check-images
     image: ghcr.io/dativa-lv/plugin-portainer-deploy
     pull: true
     settings:
