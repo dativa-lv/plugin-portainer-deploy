@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -78,13 +79,13 @@ func startRegistry(t *testing.T, private bool) *testRegistry {
 	return reg
 }
 
-func TestImageChecker(t *testing.T) {
+func TestImageVerifier(t *testing.T) {
 	privateRegistry := startRegistry(t, true)
 	publicRegistry := startRegistry(t, false)
 
-	checker := imageChecker{
-		hosts: []string{privateRegistry.host},
-		cred:  registryCredentials,
+	verifier := imageVerifier{
+		privateRegistries: []string{privateRegistry.host},
+		credentials:       registryCredentials,
 	}
 
 	t.Run("existing images pass", func(t *testing.T) {
@@ -95,7 +96,7 @@ func TestImageChecker(t *testing.T) {
 			"$REGISTRY/" + existingImage,
 		}
 
-		if err := checker.check(t.Context(), images); err != nil {
+		if err := verifier.verifyAll(t.Context(), images); err != nil {
 			t.Fatalf("want no error, got %v", err)
 		}
 	})
@@ -103,7 +104,7 @@ func TestImageChecker(t *testing.T) {
 	t.Run("credentials are sent only to registry-hosts", func(t *testing.T) {
 		publicRegistry.receivedCredentials.Store(false)
 
-		if err := checker.check(t.Context(), []string{publicRegistry.image(existingImage)}); err != nil {
+		if err := verifier.verifyAll(t.Context(), []string{publicRegistry.image(existingImage)}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -116,19 +117,38 @@ func TestImageChecker(t *testing.T) {
 		missing := privateRegistry.image(missingImage)
 		existing := publicRegistry.image(existingImage)
 
-		err := checker.check(t.Context(), []string{missing, existing})
+		err := verifier.verifyAll(t.Context(), []string{missing, existing})
 		if err == nil || !strings.Contains(err.Error(), missing) || strings.Contains(err.Error(), existing) {
 			t.Errorf("want error naming only %s, got %v", missing, err)
 		}
 	})
 
 	t.Run("private registry outside registry-hosts fails", func(t *testing.T) {
-		withoutHosts := imageChecker{cred: registryCredentials}
+		withoutPrivateRegistries := imageVerifier{credentials: registryCredentials}
 
-		if err := withoutHosts.check(t.Context(), []string{privateRegistry.image(existingImage)}); err == nil {
+		if err := withoutPrivateRegistries.verifyAll(t.Context(), []string{privateRegistry.image(existingImage)}); err == nil {
 			t.Error("want error: the registry was queried without credentials")
 		}
 	})
+}
+
+func TestNormalizeRegistryHosts(t *testing.T) {
+	privateRegistries, err := normalizeRegistryHosts([]string{"docker.io", "test.lv"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that each image's registry is included in the resolved hosts list.
+	for _, image := range []string{"myorg/private:1.0", "docker.io/myorg/private:1.0", "test.lv/team/app:1.0"} {
+		reference, err := name.ParseReference(image)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if registry := reference.Context().RegistryStr(); !slices.Contains(privateRegistries, registry) {
+			t.Errorf("%s: registry %s not in %v, credentials would not be sent", image, registry, privateRegistries)
+		}
+	}
 }
 
 const apiStack = `
@@ -160,7 +180,7 @@ func writeFiles(t *testing.T, dir string, files map[string]string) {
 	}
 }
 
-func TestStackImages(t *testing.T) {
+func TestCollectStackImages(t *testing.T) {
 	t.Run("glob returns each image once, sorted", func(t *testing.T) {
 		dir := t.TempDir()
 		writeFiles(t, dir, map[string]string{
@@ -168,7 +188,7 @@ func TestStackImages(t *testing.T) {
 			"tv/web.yaml":  webStack,
 		})
 
-		images, err := stackImages(filepath.Join(dir, "*", "*.yaml"))
+		images, err := collectStackImages(filepath.Join(dir, "*", "*.yaml"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -188,7 +208,7 @@ func TestStackImages(t *testing.T) {
 		})
 		t.Chdir(dir)
 
-		images, err := stackImages("")
+		images, err := collectStackImages("")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -205,7 +225,7 @@ func TestStackImages(t *testing.T) {
 			"dev/broken.yaml": "services:\n  web:\n   image: x\n  - bad indent\n",
 		})
 
-		_, err := stackImages(filepath.Join(dir, "*", "*.yaml"))
+		_, err := collectStackImages(filepath.Join(dir, "*", "*.yaml"))
 		if err == nil || !strings.Contains(err.Error(), "broken.yaml") {
 			t.Errorf("want error naming broken.yaml, got %v", err)
 		}
@@ -217,7 +237,7 @@ func TestStackImages(t *testing.T) {
 			"dev/dup.yaml": "services:\n  web:\n    image: x\n    image: y\n",
 		})
 
-		_, err := stackImages(filepath.Join(dir, "*", "*.yaml"))
+		_, err := collectStackImages(filepath.Join(dir, "*", "*.yaml"))
 		if err == nil || !strings.Contains(err.Error(), "dup.yaml") || !strings.Contains(err.Error(), "already defined") {
 			t.Errorf("want duplicate key error naming dup.yaml, got %v", err)
 		}
@@ -227,7 +247,7 @@ func TestStackImages(t *testing.T) {
 		dir := t.TempDir()
 		writeFiles(t, dir, map[string]string{"dev/alias.yaml": "services:\n  web: *missing\n"})
 
-		if _, err := stackImages(filepath.Join(dir, "*", "*.yaml")); err == nil {
+		if _, err := collectStackImages(filepath.Join(dir, "*", "*.yaml")); err == nil {
 			t.Error("want error, got nil")
 		}
 	})
@@ -239,14 +259,14 @@ func TestStackImages(t *testing.T) {
 			"dev/empty.yaml": "",
 		})
 
-		images, err := stackImages(filepath.Join(dir, "*", "*.yaml"))
+		images, err := collectStackImages(filepath.Join(dir, "*", "*.yaml"))
 		if err != nil || strings.Join(images, ",") != "example.com/web:1" {
 			t.Errorf("want [example.com/web:1], got %v, %v", images, err)
 		}
 	})
 
 	t.Run("no matching files fails", func(t *testing.T) {
-		if _, err := stackImages(filepath.Join(t.TempDir(), "*.yaml")); err == nil {
+		if _, err := collectStackImages(filepath.Join(t.TempDir(), "*.yaml")); err == nil {
 			t.Error("want error, got nil")
 		}
 	})

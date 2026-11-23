@@ -24,52 +24,80 @@ import (
 
 // stackFile is the part of a compose/stack file the image check reads.
 type stackFile struct {
-	Services map[string]struct {
-		Image string `yaml:"image"`
-	} `yaml:"services"`
+	Services map[string]stackService `yaml:"services"`
 }
 
-// imageChecker verifies that images exist in their registries.
-type imageChecker struct {
-	hosts     []string
-	cred      authn.Authenticator
-	transport http.RoundTripper
+type stackService struct {
+	Image string `yaml:"image"`
+}
+
+// imageVerifier checks that images exist in their registries.
+type imageVerifier struct {
+	privateRegistries []string
+	credentials       authn.Authenticator
+	transport         http.RoundTripper
 }
 
 // checkImages verifies that every image referenced by the stack files exists.
 func (p *Plugin) checkImages(ctx context.Context) error {
-	images, err := stackImages(p.Settings.StackPath)
+	images, err := collectStackImages(p.Settings.StackPath)
 	if err != nil {
 		return err
 	}
 
-	checker := imageChecker{
-		hosts:     p.Settings.RegistryHosts,
-		cred:      authn.Anonymous,
-		transport: p.HTTPClient().Transport,
-	}
-	if p.Settings.RegistryUsername != "" {
-		checker.cred = &authn.Basic{Username: p.Settings.RegistryUsername, Password: p.Settings.RegistryPassword}
+	privateRegistries, err := normalizeRegistryHosts(p.Settings.RegistryHosts)
+	if err != nil {
+		return err
 	}
 
-	return checker.check(ctx, images)
+	verifier := imageVerifier{
+		privateRegistries: privateRegistries,
+		credentials:       authn.Anonymous,
+		transport:         p.HTTPClient().Transport,
+	}
+
+	if p.Settings.RegistryUsername != "" {
+		verifier.credentials = &authn.Basic{
+			Username: p.Settings.RegistryUsername,
+			Password: p.Settings.RegistryPassword,
+		}
+	}
+
+	return verifier.verifyAll(ctx, images)
 }
 
-// stackFiles returns every .yaml/.yml file not in dot-directories, e.g. .git.
-func stackFiles(pattern string) ([]string, error) {
+// normalizeRegistryHosts converts hosts to the names image references resolve to.
+func normalizeRegistryHosts(hosts []string) ([]string, error) {
+	registries := make([]string, 0, len(hosts))
+
+	for _, host := range hosts {
+		registry, err := name.NewRegistry(host)
+		if err != nil {
+			return nil, fmt.Errorf("invalid registry-hosts entry %q: %w", host, err)
+		}
+
+		registries = append(registries, registry.RegistryStr())
+	}
+
+	return registries, nil
+}
+
+// findStackFiles returns the files matching pattern or, when pattern is empty,
+// every YAML file in the workspace outside hidden directories (.git, .woodpecker).
+func findStackFiles(pattern string) ([]string, error) {
 	if pattern != "" {
 		return filepath.Glob(pattern)
 	}
 
 	var files []string
 
-	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(".", func(path string, entry fs.DirEntry, err error) error {
 		switch {
 		case err != nil:
 			return err
-		case d.IsDir() && path != "." && strings.HasPrefix(d.Name(), "."):
+		case isHiddenDir(path, entry):
 			return filepath.SkipDir
-		case !d.IsDir() && (filepath.Ext(path) == ".yaml" || filepath.Ext(path) == ".yml"):
+		case isYAMLFile(path, entry):
 			files = append(files, path)
 		}
 
@@ -79,9 +107,19 @@ func stackFiles(pattern string) ([]string, error) {
 	return files, err
 }
 
-// stackImages returns the sorted, unique images referenced by the stack files.
-func stackImages(pattern string) ([]string, error) {
-	files, err := stackFiles(pattern)
+func isHiddenDir(path string, entry fs.DirEntry) bool {
+	return entry.IsDir() && path != "." && strings.HasPrefix(entry.Name(), ".")
+}
+
+func isYAMLFile(path string, entry fs.DirEntry) bool {
+	extension := filepath.Ext(path)
+
+	return !entry.IsDir() && (extension == ".yaml" || extension == ".yml")
+}
+
+// collectStackImages returns the sorted, unique images referenced by the stack files.
+func collectStackImages(pattern string) ([]string, error) {
+	files, err := findStackFiles(pattern)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list stack files %q: %w", pattern, err)
 	}
@@ -90,39 +128,40 @@ func stackImages(pattern string) ([]string, error) {
 		return nil, fmt.Errorf("no stack files found (stack-path %q)", pattern)
 	}
 
-	seen := map[string]struct{}{}
+	uniqueImages := map[string]struct{}{}
 
 	for _, file := range files {
-		data, err := os.ReadFile(file) //nolint:gosec // G304: the paths come from the pipeline's own workspace
+		content, err := os.ReadFile(file) //nolint:gosec // G304: the paths come from the pipeline's own workspace
 		if err != nil {
 			return nil, fmt.Errorf("failed to read %s: %w", file, err)
 		}
 
-		// yaml.v3 reports syntax errors,
-		if err := yaml.Unmarshal(data, new(any)); err != nil {
+		// Decoding into any reports only syntax errors (indentation, duplicate keys, undefined aliases).
+		if err := yaml.Unmarshal(content, new(any)); err != nil {
 			return nil, fmt.Errorf("invalid YAML in %s: %w", file, err)
 		}
 
+		// Valid YAML of another shape (e.g. an app config with a "services" list) is not a stack file.
 		var stack stackFile
-		if err := yaml.Unmarshal(data, &stack); err != nil {
+		if err := yaml.Unmarshal(content, &stack); err != nil {
 			log.Warn().Msgf("skipping %s: not a stack file: %v", file, err)
 
 			continue
 		}
 
-		for _, svc := range stack.Services {
-			if svc.Image != "" {
-				seen[svc.Image] = struct{}{}
+		for _, service := range stack.Services {
+			if service.Image != "" {
+				uniqueImages[service.Image] = struct{}{}
 			}
 		}
 	}
 
-	return slices.Sorted(maps.Keys(seen)), nil
+	return slices.Sorted(maps.Keys(uniqueImages)), nil
 }
 
-// check looks up every image's manifest and returns an error listing the ones that failed.
-func (c imageChecker) check(ctx context.Context, images []string) error {
-	var failed []string
+// verifyAll checks every image and returns an error listing the ones that failed.
+func (v imageVerifier) verifyAll(ctx context.Context, images []string) error {
+	var failedImages []string
 
 	for _, image := range images {
 		if strings.Contains(image, "$") {
@@ -131,9 +170,10 @@ func (c imageChecker) check(ctx context.Context, images []string) error {
 			continue
 		}
 
-		if err := c.head(ctx, image); err != nil {
+		if err := v.verify(ctx, image); err != nil {
 			log.Error().Msgf("Image %s %s", image, failureReason(err))
-			failed = append(failed, image)
+
+			failedImages = append(failedImages, image)
 
 			continue
 		}
@@ -141,39 +181,48 @@ func (c imageChecker) check(ctx context.Context, images []string) error {
 		log.Info().Msgf("Image %s exists", image)
 	}
 
-	if len(failed) > 0 {
-		return fmt.Errorf("%d image(s) not found or not accessible: %s", len(failed), strings.Join(failed, ", "))
+	if len(failedImages) > 0 {
+		return fmt.Errorf("%d image(s) not found or not accessible: %s",
+			len(failedImages), strings.Join(failedImages, ", "))
 	}
 
 	return nil
 }
 
-// head performs a HEAD request for the given image reference to check its existence and accessibility.
-func (c imageChecker) head(ctx context.Context, image string) error {
-	ref, err := name.ParseReference(image)
+// verify checks that the image's manifest exists.
+func (v imageVerifier) verify(ctx context.Context, image string) error {
+	reference, err := name.ParseReference(image)
 	if err != nil {
 		return err
 	}
 
-	auth := authn.Anonymous
-	if slices.Contains(c.hosts, ref.Context().RegistryStr()) {
-		auth = c.cred
+	options := []remote.Option{
+		remote.WithContext(ctx),
+		remote.WithAuth(v.credentialsFor(reference.Context().RegistryStr())),
 	}
 
-	opts := []remote.Option{remote.WithContext(ctx), remote.WithAuth(auth)}
-	if c.transport != nil {
-		opts = append(opts, remote.WithTransport(c.transport))
+	if v.transport != nil {
+		options = append(options, remote.WithTransport(v.transport))
 	}
 
-	_, err = remote.Head(ref, opts...)
+	_, err = remote.Head(reference, options...)
 
 	return err
 }
 
-// failureReason returns a human-readable explanation for why an image lookup failed.
+// credentialsFor returns the credentials for a private registry and anonymous access for any other.
+func (v imageVerifier) credentialsFor(registry string) authn.Authenticator {
+	if slices.Contains(v.privateRegistries, registry) {
+		return v.credentials
+	}
+
+	return authn.Anonymous
+}
+
+// failureReason explains why an image check failed.
 func failureReason(err error) string {
-	if terr, ok := errors.AsType[*transport.Error](err); ok {
-		switch terr.StatusCode {
+	if registryErr, ok := errors.AsType[*transport.Error](err); ok {
+		switch registryErr.StatusCode {
 		case http.StatusNotFound:
 			return "not found"
 		case http.StatusUnauthorized, http.StatusForbidden:
