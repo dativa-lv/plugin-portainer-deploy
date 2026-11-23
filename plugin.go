@@ -30,7 +30,7 @@ type Settings struct {
 	HealthCheckTimeout string
 	JobTimeout         string
 	DeployTimeout      string
-	CheckImages        bool
+	ImagesCheck        bool
 	RegistryHosts      []string
 	RegistryUsername   string
 	RegistryPassword   string
@@ -182,27 +182,27 @@ func (p *Plugin) Flags() []cli.Flag {
 			Destination: &p.Settings.DeployTimeout,
 		},
 		&cli.BoolFlag{
-			Name:        "check-images",
-			Sources:     cli.EnvVars("PLUGIN_CHECK_IMAGES"),
+			Name:        "images-check",
+			Sources:     cli.EnvVars("PLUGIN_IMAGES_CHECK"),
 			Usage:       "Only lint the stack files matching stack-path (glob) and check that every image in them exists; Portainer is not contacted",
-			Destination: &p.Settings.CheckImages,
+			Destination: &p.Settings.ImagesCheck,
 		},
 		&cli.StringSliceFlag{
 			Name:        "registry-hosts",
 			Sources:     cli.EnvVars("PLUGIN_REGISTRY_HOSTS"),
-			Usage:       "Registry hosts that get registry-username/registry-password in check-images mode; other registries are queried anonymously",
+			Usage:       "Registry hosts that get registry-username/registry-password in images-check mode; other registries are queried anonymously",
 			Destination: &p.Settings.RegistryHosts,
 		},
 		&cli.StringFlag{
 			Name:        "registry-username",
 			Sources:     cli.EnvVars("PLUGIN_REGISTRY_USERNAME"),
-			Usage:       "Registry username for check-images",
+			Usage:       "Registry username for images-check",
 			Destination: &p.Settings.RegistryUsername,
 		},
 		&cli.StringFlag{
 			Name:        "registry-password",
 			Sources:     cli.EnvVars("PLUGIN_REGISTRY_PASSWORD"),
-			Usage:       "Registry password or token for check-images",
+			Usage:       "Registry password or token for images-check",
 			Destination: &p.Settings.RegistryPassword,
 		},
 	}

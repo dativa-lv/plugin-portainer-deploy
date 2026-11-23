@@ -39,10 +39,10 @@ Define the plugin as a step in your `.woodpecker.yaml` and provide settings unde
 | `deploy-timeout` | `15m` | no | Timeout for Portainer to finish deploying the stack (Go duration, e.g. `5m`; `0` means no limit). Only applies to Portainer versions that deploy stacks in the background. |
 | `log-level` | `info` | no | Logging level |
 | `skip-verify` | `false` | _optional_ | Skips the SSL verification. |
-| `check-images` | `false` | no | Lint-only mode, nothing is deployed: lint the stack files matching `stack-path` (glob) for YAML syntax errors, duplicate keys and undeclared aliases, and fail if any of their images does not exist. With an empty `stack-path`, every `*.yaml`/`*.yml` file outside dot-directories (e.g. `.git`, `.woodpecker`) is scanned. |
+| `images-check` | `false` | no | Lint-only mode, nothing is deployed: lint the stack files matching `stack-path` (glob) for YAML syntax errors, duplicate keys and undeclared aliases, and fail if any of their images does not exist. With an empty `stack-path`, every `*.yaml`/`*.yml` file outside dot-directories (e.g. `.git`, `.woodpecker`) is scanned. |
 | `registry-hosts` | _empty_ | no | Comma-separated registry hosts that receive `registry-username`/`registry-password`. Other registries are checked anonymously. |
-| `registry-username` | _empty_ | no | Registry username for `check-images` |
-| `registry-password` | _empty_ | no | Registry password or token for `check-images` |
+| `registry-username` | _empty_ | no | Registry username for `images-check` |
+| `registry-password` | _empty_ | no | Registry password or token for `images-check` |
 
 \* Required only when the corresponding feature is enabled. `stack-path` is required for stack deploys, and optional for service-update mode.
 
@@ -110,11 +110,11 @@ steps:
 
 ```yaml
 steps:
-  - name: check-images
+  - name: images-check
     image: ghcr.io/dativa-lv/plugin-portainer-deploy
     pull: true
     settings:
-      check-images: true 
+      images-check: true 
       registry-hosts: registry.example.com
       registry-username:
         from_secret: registry_username

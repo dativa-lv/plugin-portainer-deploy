@@ -22,7 +22,7 @@ func logGroup(title string) {
 
 // Validate handles the settings validation of the plugin.
 func (p *Plugin) Validate() error {
-	if p.Settings.CheckImages {
+	if p.Settings.ImagesCheck {
 		return nil
 	}
 
@@ -131,8 +131,8 @@ func (p *Plugin) Execute(ctx context.Context) error {
 		return err
 	}
 
-	if p.Settings.CheckImages {
-		log.Info().Msg("check-images: only linting stack files and checking images")
+	if p.Settings.ImagesCheck {
+		log.Info().Msg("images-check: only linting stack files and checking images")
 
 		return p.checkImages(ctx)
 	}
