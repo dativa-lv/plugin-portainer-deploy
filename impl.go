@@ -137,6 +137,15 @@ func (p *Plugin) Execute(ctx context.Context) error {
 		return p.checkImages(ctx)
 	}
 
+	// The stack rules apply to every stack deploy; a stack that breaks them is not deployed.
+	if p.Settings.StackPath != "" {
+		logGroup("Check stack rules")
+
+		if err := lintStackFile(p.Settings.StackPath); err != nil {
+			return err
+		}
+	}
+
 	// Parse Teams once here so the client receives a clean []string.
 	var teams []string
 
