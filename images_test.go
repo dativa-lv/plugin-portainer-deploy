@@ -3,6 +3,7 @@
 package plugin
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/urfave/cli/v3"
 )
 
 const (
@@ -270,4 +272,27 @@ func TestCollectStackImages(t *testing.T) {
 			t.Error("want error, got nil")
 		}
 	})
+}
+
+func TestImagesCheckSetting(t *testing.T) {
+	// Woodpecker passes each setting as PLUGIN_<NAME>; check-images is the name used by 1.0.4.
+	for _, envVar := range []string{"PLUGIN_IMAGES_CHECK", "PLUGIN_CHECK_IMAGES"} {
+		t.Run(envVar, func(t *testing.T) {
+			t.Setenv(envVar, "true")
+
+			p := &Plugin{Settings: &Settings{}}
+			command := &cli.Command{
+				Flags:  p.Flags(),
+				Action: func(context.Context, *cli.Command) error { return nil },
+			}
+
+			if err := command.Run(t.Context(), []string{"plugin"}); err != nil {
+				t.Fatal(err)
+			}
+
+			if !p.Settings.ImagesCheck {
+				t.Errorf("%s=true did not enable images-check", envVar)
+			}
+		})
+	}
 }
