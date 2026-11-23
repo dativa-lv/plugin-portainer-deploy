@@ -182,10 +182,8 @@ func (p *Plugin) Flags() []cli.Flag {
 			Destination: &p.Settings.DeployTimeout,
 		},
 		&cli.BoolFlag{
-			Name:    "images-check",
-			Aliases: []string{"check-images"},
-			// PLUGIN_CHECK_IMAGES keeps pipelines written for 1.0.4 (check-images) working.
-			Sources:     cli.EnvVars("PLUGIN_IMAGES_CHECK", "PLUGIN_CHECK_IMAGES"),
+			Name:        "images-check",
+			Sources:     cli.EnvVars("PLUGIN_IMAGES_CHECK"),
 			Usage:       "Only lint the stack files matching stack-path (glob) and check that every image in them exists; Portainer is not contacted",
 			Destination: &p.Settings.ImagesCheck,
 		},
