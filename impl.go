@@ -137,6 +137,19 @@ func (p *Plugin) Execute(ctx context.Context) error {
 		return p.checkImages(ctx)
 	}
 
+	if p.Settings.StackPath != "" {
+		logGroup("Check stack rules")
+
+		stacks, err := loadStacks(p.Settings.StackPath)
+		if err != nil {
+			return err
+		}
+
+		if err := lintStacks(stacks); err != nil {
+			return err
+		}
+	}
+
 	// Parse Teams once here so the client receives a clean []string.
 	var teams []string
 

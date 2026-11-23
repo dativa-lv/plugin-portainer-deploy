@@ -22,13 +22,32 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// stackFile is the part of a compose/stack file the image check reads.
+// stackFile is the part of a compose/stack file the image check and the stack rules read.
 type stackFile struct {
 	Services map[string]stackService `yaml:"services"`
 }
 
 type stackService struct {
-	Image string `yaml:"image"`
+	Image  string        `yaml:"image"`
+	Deploy serviceDeploy `yaml:"deploy"`
+}
+
+// serviceDeploy holds the deploy settings the stack rules check.
+type serviceDeploy struct {
+	Mode      string `yaml:"mode"`
+	Replicas  any    `yaml:"replicas"`
+	Resources struct {
+		Limits struct {
+			CPUs   any `yaml:"cpus"`
+			Memory any `yaml:"memory"`
+		} `yaml:"limits"`
+	} `yaml:"resources"`
+}
+
+// loadedStack is a parsed stack file and the path it was read from.
+type loadedStack struct {
+	file  string
+	stack stackFile
 }
 
 // imageVerifier checks that images exist in their registries.
@@ -38,12 +57,14 @@ type imageVerifier struct {
 	transport         http.RoundTripper
 }
 
-// checkImages verifies that every image referenced by the stack files exists.
+// checkImages applies the stack rules and verifies that every image referenced by the stack files exists.
 func (p *Plugin) checkImages(ctx context.Context) error {
-	images, err := collectStackImages(p.Settings.StackPath)
+	stacks, err := loadStacks(p.Settings.StackPath)
 	if err != nil {
 		return err
 	}
+
+	rulesErr := lintStacks(stacks)
 
 	privateRegistries, err := normalizeRegistryHosts(p.Settings.RegistryHosts)
 	if err != nil {
@@ -63,7 +84,7 @@ func (p *Plugin) checkImages(ctx context.Context) error {
 		}
 	}
 
-	return verifier.verifyAll(ctx, images)
+	return errors.Join(rulesErr, verifier.verifyAll(ctx, stackImages(stacks)))
 }
 
 // normalizeRegistryHosts converts hosts to the names image references resolve to.
@@ -114,11 +135,29 @@ func isHiddenDir(path string, entry fs.DirEntry) bool {
 func isYAMLFile(path string, entry fs.DirEntry) bool {
 	extension := filepath.Ext(path)
 
-	return !entry.IsDir() && (extension == ".yaml" || extension == ".yml")
+	return !entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") && (extension == ".yaml" || extension == ".yml")
 }
 
-// collectStackImages returns the sorted, unique images referenced by the stack files.
-func collectStackImages(pattern string) ([]string, error) {
+// stackImages returns the sorted, unique images referenced by the stacks.
+func stackImages(stacks []loadedStack) []string {
+	uniqueImages := map[string]struct{}{}
+
+	for _, loaded := range stacks {
+		for _, service := range loaded.stack.Services {
+			if service.Image == "" {
+				continue
+			}
+
+			uniqueImages[service.Image] = struct{}{}
+		}
+	}
+
+	return slices.Sorted(maps.Keys(uniqueImages))
+}
+
+// loadStacks parses the stack files matching pattern. Invalid YAML is an error;
+// valid YAML that is not a stack file is skipped with a warning.
+func loadStacks(pattern string) ([]loadedStack, error) {
 	files, err := findStackFiles(pattern)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list stack files %q: %w", pattern, err)
@@ -128,7 +167,7 @@ func collectStackImages(pattern string) ([]string, error) {
 		return nil, fmt.Errorf("no stack files found (stack-path %q)", pattern)
 	}
 
-	uniqueImages := map[string]struct{}{}
+	stacks := make([]loadedStack, 0, len(files))
 
 	for _, file := range files {
 		content, err := os.ReadFile(file) //nolint:gosec // G304: the paths come from the pipeline's own workspace
@@ -149,14 +188,10 @@ func collectStackImages(pattern string) ([]string, error) {
 			continue
 		}
 
-		for _, service := range stack.Services {
-			if service.Image != "" {
-				uniqueImages[service.Image] = struct{}{}
-			}
-		}
+		stacks = append(stacks, loadedStack{file: file, stack: stack})
 	}
 
-	return slices.Sorted(maps.Keys(uniqueImages)), nil
+	return stacks, nil
 }
 
 // verifyAll checks every image and returns an error listing the ones that failed.
