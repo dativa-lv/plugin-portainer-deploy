@@ -407,6 +407,36 @@ func (c *Client) WaitForStackDeployment(ctx context.Context, stackID int, timeou
 	return err
 }
 
+// VerifyStackFile fails when the stack file Portainer holds differs from the deployed file.
+// Portainer restores the previous stack file when docker stack deploy fails, e.g. on a missing
+// external secret, and some versions still answer the update with 200 OK.
+func (c *Client) VerifyStackFile(ctx context.Context, stackID int) error {
+	want, err := c.readYAMLAsString()
+	if err != nil {
+		return fmt.Errorf("failed to read YAML file: %w", err)
+	}
+
+	var stored struct {
+		StackFileContent string `json:"StackFileContent"`
+	}
+
+	err = c.getJSON(ctx, fmt.Sprintf("%s/api/stacks/%d/file", c.ServerURL, stackID), &stored)
+	if err != nil {
+		return fmt.Errorf("failed to read stack file from Portainer: %w", err)
+	}
+
+	if normalizeStackFile(stored.StackFileContent) != normalizeStackFile(want) {
+		return errors.New("portainer did not apply the stack file and kept the previous one; " +
+			"docker stack deploy most likely failed (missing external secret, config or network?), check the Portainer logs")
+	}
+
+	return nil
+}
+
+func normalizeStackFile(s string) string {
+	return strings.TrimSpace(strings.ReplaceAll(s, "\r\n", "\n"))
+}
+
 // UpdateResourceControl updates the access control settings for a resource in Portainer.
 func (c *Client) UpdateResourceControl(ctx context.Context, stackID int) (string, error) {
 	resourceID, err := c.GetResourceID(ctx, stackID)

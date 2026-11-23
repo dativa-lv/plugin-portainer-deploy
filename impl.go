@@ -228,6 +228,10 @@ func (p *Plugin) Execute(ctx context.Context) error {
 		return fmt.Errorf("failed to deploy stack %s: %w", p.Settings.StackName, err)
 	}
 
+	if err := client.VerifyStackFile(ctx, stackID); err != nil {
+		return fmt.Errorf("failed to deploy stack %s: %w", p.Settings.StackName, err)
+	}
+
 	if waitForJobs {
 		// Jobs get their own log groups.
 		if err := client.WaitForStackJobs(ctx, endpointID, jobIterations, p.Settings.jobTimeout); err != nil {

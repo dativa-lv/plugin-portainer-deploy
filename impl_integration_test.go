@@ -37,6 +37,9 @@ func TestClientWorkflow_Integration_HappyPath_AllChecksEnabled(t *testing.T) {
 	mux.HandleFunc("/api/stacks/10", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(portainerStackDetail{ID: 10, Name: "test-stack", ResourceControl: portainerResourceCtrl{ID: 99}})
 	})
+	mux.HandleFunc("/api/stacks/10/file", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]string{"StackFileContent": "version: '3'\nservices: {}\n"})
+	})
 	mux.HandleFunc("/api/teams", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode([]portainerTeam{{ID: 5, Name: "team-a"}, {ID: 6, Name: "team-b"}})
 	})
@@ -96,6 +99,9 @@ func TestClientWorkflow_Integration_HappyPath_AllChecksEnabled(t *testing.T) {
 	}
 	if _, err := c.UpdateResourceControl(ctx, stackID); err != nil {
 		t.Fatalf("rbac: %v", err)
+	}
+	if err := c.VerifyStackFile(ctx, stackID); err != nil {
+		t.Fatalf("verify: %v", err)
 	}
 	if err := c.WaitForStackRunning(ctx, endpointID, 200*time.Millisecond); err != nil {
 		t.Fatalf("running: %v", err)

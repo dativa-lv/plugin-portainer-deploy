@@ -784,3 +784,35 @@ func TestCheckHealth_TimesOut(t *testing.T) {
 		t.Fatal("expected timeout")
 	}
 }
+
+func TestVerifyStackFile(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/stack.yml"
+	if err := os.WriteFile(path, []byte("services:\n  web:\n    image: nginx\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		stored  string
+		wantErr bool
+	}{
+		"applied":            {stored: "services:\r\n  web:\r\n    image: nginx", wantErr: false},
+		"previous file kept": {stored: "services:\n  old:\n    image: nginx\n", wantErr: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/stacks/10/file" {
+					t.Errorf("unexpected path %s", r.URL.Path)
+				}
+				_ = json.NewEncoder(w).Encode(map[string]string{"StackFileContent": tc.stored})
+			}))
+			defer srv.Close()
+
+			c := newTestClient(t, srv.Client(), srv.URL, "prod")
+			c.StackPath = path
+			if err := c.VerifyStackFile(context.Background(), 10); (err != nil) != tc.wantErr {
+				t.Fatalf("wantErr %v, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
