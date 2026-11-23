@@ -12,6 +12,7 @@ Portainer Deploy Plugin for Woodpecker-CI supports GitOps workflows by deploying
 - Fail the step when Portainer reports a stack deployment error
 - Optionally poll a service health endpoint after the stack is running
 - Check that every image referenced by stack files exists in its registry
+- Enforce [stack rules](#stack-rules) on every stack deploy and check
 
 ## Configuration
 
@@ -39,12 +40,22 @@ Define the plugin as a step in your `.woodpecker.yaml` and provide settings unde
 | `deploy-timeout` | `15m` | no | Timeout for Portainer to finish deploying the stack (Go duration, e.g. `5m`; `0` means no limit). Only applies to Portainer versions that deploy stacks in the background. |
 | `log-level` | `info` | no | Logging level |
 | `skip-verify` | `false` | _optional_ | Skips the SSL verification. |
-| `images-check` | `false` | no | Lint-only mode, nothing is deployed: lint the stack files matching `stack-path` (glob) for YAML syntax errors, duplicate keys and undeclared aliases, and fail if any of their images does not exist. With an empty `stack-path`, every `*.yaml`/`*.yml` file outside dot-directories (e.g. `.git`, `.woodpecker`) is scanned. |
+| `stack-rules` | `true` | no | Apply the [stack rules](#stack-rules). Set to `false` to skip them. |
+| `images-check` | `false` | no | Lint-only mode, nothing is deployed: lint the stack files matching `stack-path` (glob) for YAML syntax errors, duplicate keys, undeclared aliases and the [stack rules](#stack-rules), and fail if any of their images does not exist. With an empty `stack-path`, every `*.yaml`/`*.yml` file outside dot-directories (e.g. `.git`, `.woodpecker`) is scanned. |
 | `registry-hosts` | _empty_ | no | Comma-separated registry hosts that receive `registry-username`/`registry-password`. Other registries are checked anonymously. |
 | `registry-username` | _empty_ | no | Registry username for `images-check` |
 | `registry-password` | _empty_ | no | Registry password or token for `images-check` |
 
 \* Required only when the corresponding feature is enabled. `stack-path` is required for stack deploys, and optional for service-update mode.
+
+## Stack rules
+
+Every stack deploy (`stack-path` set) and every `images-check` applies these rules to each service that has an `image`, unless `stack-rules` is `false`.
+
+| When | Result |
+| --- | --- |
+| A service has no `deploy.resources.limits.cpus` or `deploy.resources.limits.memory` | error: nothing is deployed |
+| A replicated service runs a single replica (`replicas: 1` or not set) | warning only |
 
 ## Examples
 

@@ -180,7 +180,7 @@ func writeFiles(t *testing.T, dir string, files map[string]string) {
 	}
 }
 
-func TestCollectStackImages(t *testing.T) {
+func TestLoadStacks(t *testing.T) {
 	t.Run("glob returns each image once, sorted", func(t *testing.T) {
 		dir := t.TempDir()
 		writeFiles(t, dir, map[string]string{
@@ -188,10 +188,12 @@ func TestCollectStackImages(t *testing.T) {
 			"tv/web.yaml":  webStack,
 		})
 
-		images, err := collectStackImages(filepath.Join(dir, "*", "*.yaml"))
+		stacks, err := loadStacks(filepath.Join(dir, "*", "*.yaml"))
 		if err != nil {
 			t.Fatal(err)
 		}
+
+		images := stackImages(stacks)
 
 		want := "example.com/team/api:1.0,example.com/team/web:2.0"
 		if got := strings.Join(images, ","); got != want {
@@ -204,14 +206,17 @@ func TestCollectStackImages(t *testing.T) {
 		writeFiles(t, dir, map[string]string{
 			"prod/eu/api.yml":     apiStack,
 			".woodpecker/ci.yaml": "services:\n  - name: db\n    image: example.com/ci/db:1\n",
+			".woodpecker.yaml":    "services:\n  db:\n    image: example.com/ci/db:1\n",
 			"app-config.yaml":     "services:\n  - name: other\n",
 		})
 		t.Chdir(dir)
 
-		images, err := collectStackImages("")
+		stacks, err := loadStacks("")
 		if err != nil {
 			t.Fatal(err)
 		}
+
+		images := stackImages(stacks)
 
 		want := "example.com/team/api:1.0"
 		if got := strings.Join(images, ","); got != want {
@@ -225,7 +230,7 @@ func TestCollectStackImages(t *testing.T) {
 			"dev/broken.yaml": "services:\n  web:\n   image: x\n  - bad indent\n",
 		})
 
-		_, err := collectStackImages(filepath.Join(dir, "*", "*.yaml"))
+		_, err := loadStacks(filepath.Join(dir, "*", "*.yaml"))
 		if err == nil || !strings.Contains(err.Error(), "broken.yaml") {
 			t.Errorf("want error naming broken.yaml, got %v", err)
 		}
@@ -237,7 +242,7 @@ func TestCollectStackImages(t *testing.T) {
 			"dev/dup.yaml": "services:\n  web:\n    image: x\n    image: y\n",
 		})
 
-		_, err := collectStackImages(filepath.Join(dir, "*", "*.yaml"))
+		_, err := loadStacks(filepath.Join(dir, "*", "*.yaml"))
 		if err == nil || !strings.Contains(err.Error(), "dup.yaml") || !strings.Contains(err.Error(), "already defined") {
 			t.Errorf("want duplicate key error naming dup.yaml, got %v", err)
 		}
@@ -247,7 +252,7 @@ func TestCollectStackImages(t *testing.T) {
 		dir := t.TempDir()
 		writeFiles(t, dir, map[string]string{"dev/alias.yaml": "services:\n  web: *missing\n"})
 
-		if _, err := collectStackImages(filepath.Join(dir, "*", "*.yaml")); err == nil {
+		if _, err := loadStacks(filepath.Join(dir, "*", "*.yaml")); err == nil {
 			t.Error("want error, got nil")
 		}
 	})
@@ -259,14 +264,14 @@ func TestCollectStackImages(t *testing.T) {
 			"dev/empty.yaml": "",
 		})
 
-		images, err := collectStackImages(filepath.Join(dir, "*", "*.yaml"))
-		if err != nil || strings.Join(images, ",") != "example.com/web:1" {
+		stacks, err := loadStacks(filepath.Join(dir, "*", "*.yaml"))
+		if images := stackImages(stacks); err != nil || strings.Join(images, ",") != "example.com/web:1" {
 			t.Errorf("want [example.com/web:1], got %v, %v", images, err)
 		}
 	})
 
 	t.Run("no matching files fails", func(t *testing.T) {
-		if _, err := collectStackImages(filepath.Join(t.TempDir(), "*.yaml")); err == nil {
+		if _, err := loadStacks(filepath.Join(t.TempDir(), "*.yaml")); err == nil {
 			t.Error("want error, got nil")
 		}
 	})

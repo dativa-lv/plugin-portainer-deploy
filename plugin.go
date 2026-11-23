@@ -30,6 +30,7 @@ type Settings struct {
 	HealthCheckTimeout string
 	JobTimeout         string
 	DeployTimeout      string
+	StackRules         bool
 	ImagesCheck        bool
 	RegistryHosts      []string
 	RegistryUsername   string
@@ -180,6 +181,13 @@ func (p *Plugin) Flags() []cli.Flag {
 			Usage:       "Timeout for Portainer to finish deploying the stack (Go duration, e.g. 5m)",
 			Value:       defaultDeployTimeout.String(),
 			Destination: &p.Settings.DeployTimeout,
+		},
+		&cli.BoolFlag{
+			Name:        "stack-rules",
+			Sources:     cli.EnvVars("PLUGIN_STACK_RULES"),
+			Usage:       "Apply the stack rules (CPU and memory limits on every service) to stack deploys and images-check",
+			Value:       true,
+			Destination: &p.Settings.StackRules,
 		},
 		&cli.BoolFlag{
 			Name:        "images-check",
