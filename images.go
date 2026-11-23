@@ -64,7 +64,10 @@ func (p *Plugin) checkImages(ctx context.Context) error {
 		return err
 	}
 
-	rulesErr := lintStacks(stacks)
+	var rulesErr error
+	if p.Settings.StackRules {
+		rulesErr = lintStacks(stacks)
+	}
 
 	privateRegistries, err := normalizeRegistryHosts(p.Settings.RegistryHosts)
 	if err != nil {

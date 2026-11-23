@@ -40,6 +40,7 @@ Define the plugin as a step in your `.woodpecker.yaml` and provide settings unde
 | `deploy-timeout` | `15m` | no | Timeout for Portainer to finish deploying the stack (Go duration, e.g. `5m`; `0` means no limit). Only applies to Portainer versions that deploy stacks in the background. |
 | `log-level` | `info` | no | Logging level |
 | `skip-verify` | `false` | _optional_ | Skips the SSL verification. |
+| `stack-rules` | `true` | no | Apply the [stack rules](#stack-rules). Set to `false` to skip them. |
 | `images-check` | `false` | no | Lint-only mode, nothing is deployed: lint the stack files matching `stack-path` (glob) for YAML syntax errors, duplicate keys, undeclared aliases and the [stack rules](#stack-rules), and fail if any of their images does not exist. With an empty `stack-path`, every `*.yaml`/`*.yml` file outside dot-directories (e.g. `.git`, `.woodpecker`) is scanned. |
 | `registry-hosts` | _empty_ | no | Comma-separated registry hosts that receive `registry-username`/`registry-password`. Other registries are checked anonymously. |
 | `registry-username` | _empty_ | no | Registry username for `images-check` |
@@ -49,7 +50,7 @@ Define the plugin as a step in your `.woodpecker.yaml` and provide settings unde
 
 ## Stack rules
 
-Every stack deploy (`stack-path` set) and every `images-check` applies these rules.
+Every stack deploy (`stack-path` set) and every `images-check` applies these rules to each service that has an `image`, unless `stack-rules` is `false`.
 
 | When | Result |
 | --- | --- |

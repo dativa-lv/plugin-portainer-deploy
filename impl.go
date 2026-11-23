@@ -137,7 +137,7 @@ func (p *Plugin) Execute(ctx context.Context) error {
 		return p.checkImages(ctx)
 	}
 
-	if p.Settings.StackPath != "" {
+	if p.Settings.StackPath != "" && p.Settings.StackRules {
 		logGroup("Check stack rules")
 
 		stacks, err := loadStacks(p.Settings.StackPath)
