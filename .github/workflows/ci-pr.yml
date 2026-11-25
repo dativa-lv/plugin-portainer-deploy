@@ -17,11 +17,18 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Vendor + generate
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          go mod vendor
+          go generate ./...
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.15.0
-          args: --timeout 3m
+          args: --timeout 3m --output.checkstyle.path golangci-lint.out --output.tab.path stdout
 
       - name: Lint Dockerfile
         run: docker run --rm -v $(pwd):/work hadolint/hadolint:v2.15.1-alpine hadolint --ignore DL3018 /work/Dockerfile.multiarch
