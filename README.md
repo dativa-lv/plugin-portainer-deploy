@@ -141,7 +141,7 @@ steps:
 
 ```yaml
 steps:
-  - name: update configs
+  - name: update-configs
     image: ghcr.io/dativa-lv/plugin-portainer-deploy
     pull: true
     settings:
