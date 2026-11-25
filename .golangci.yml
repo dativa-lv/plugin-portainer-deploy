@@ -7,6 +7,8 @@ linters:
     - wsl_v5
 
   disable:
+    - wsl
+    - gomodguard
     - godox
     - tagalign
     - exhaustruct
