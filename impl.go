@@ -23,6 +23,10 @@ func logGroup(title string) {
 // Validate handles the settings validation of the plugin.
 func (p *Plugin) Validate() error {
 	if p.Settings.ImagesCheck {
+		if p.configsMode() {
+			return errors.New("images-check and configs cannot be used together")
+		}
+
 		return nil
 	}
 
@@ -38,12 +42,16 @@ func (p *Plugin) Validate() error {
 		return errors.New("portainer environment is required")
 	}
 
-	if p.Settings.StackName == "" {
-		return errors.New("stack name is required")
-	}
-
 	if p.Settings.Public && strings.TrimSpace(p.Settings.Teams) != "" {
 		return errors.New("public and teams cannot be used together")
+	}
+
+	if p.configsMode() {
+		return p.validateConfigs()
+	}
+
+	if p.Settings.StackName == "" {
+		return errors.New("stack name is required")
 	}
 
 	if err := p.parseTimeouts(); err != nil {
@@ -180,6 +188,10 @@ func (p *Plugin) Execute(ctx context.Context) error {
 	client, err := NewClient(p, config)
 	if err != nil {
 		return fmt.Errorf("failed to initialize client: %w", err)
+	}
+
+	if p.configsMode() {
+		return p.syncConfigs(ctx, client)
 	}
 
 	logGroup("Connect to Portainer environment " + p.Settings.ServerEnvironment)

@@ -19,6 +19,7 @@ Portainer Deploy Plugin for Woodpecker-CI supports GitOps workflows by deploying
 - Run Docker Swarm job services (`replicated-job`, `global-job`), such as database migrations, and wait for them to complete. When updating services without a stack file, jobs run before the other services
 - Fail the step when Portainer reports a stack deployment error
 - Optionally poll a service health endpoint after the stack is running
+- Create and rotate Docker Swarm configs from files in Git (`configs` setting), restarting the stacks that use them
 
 ## Example
 
@@ -82,8 +83,9 @@ steps:
 | `deploy-timeout` | `15m` | no | Timeout for Portainer to finish deploying the stack (Go duration, e.g. `5m`; `0` means no limit). Only applies to Portainer versions that deploy stacks in the background. |
 | `log-level` | `info` | no | Logging level |
 | `skip-verify` | `false` | _optional_ | Skips the SSL verification. |
+| `configs` | _empty_ | no | List of `name` + `file` entries. Instead of deploying a stack, create the Swarm configs that do not exist and rotate the ones whose content changed, stopping and starting the stacks that use them. Cannot be combined with `stack-name`, `stack-path`, `service-name`, `health-check` or `images-check`. |
 
-\* Required only when the corresponding feature is enabled. `stack-path` is required for stack deploys, and optional for service-update mode.
+\* Required only when the corresponding feature is enabled. `stack-path` is required for stack deploys, and optional for service-update mode. `stack-name` is not used in configs mode.
 
 ## Job services
 
