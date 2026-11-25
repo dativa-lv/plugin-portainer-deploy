@@ -9,10 +9,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -27,11 +27,11 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.14.0
+          version: v2.15.0
           args: --timeout 3m --output.checkstyle.path golangci-lint.out --output.tab.path stdout
 
       - name: Lint Dockerfile
-        run: docker run --rm -v $(pwd):/work hadolint/hadolint:latest-alpine hadolint --ignore DL3018 /work/Dockerfile.multiarch
+        run: docker run --rm -v $(pwd):/work hadolint/hadolint:v2.15.1-alpine hadolint --ignore DL3018 /work/Dockerfile.multiarch
 
       - name: Run vet
         run: go vet ./...
@@ -40,7 +40,7 @@ jobs:
         run: go test -timeout=2m -race -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build Docker image (dry run)
         uses: docker/build-push-action@v7
@@ -57,5 +57,5 @@ jobs:
 
       - name: Image security check
         run: |
-          docker run --rm -v $(pwd):/work aquasec/trivy:0.69.3 image --exit-code 0 --severity UNKNOWN,LOW,MEDIUM --input /work/${{ github.event.repository.name }}.tar
-          docker run --rm -v $(pwd):/work aquasec/trivy:0.69.3 image --exit-code 1 --severity HIGH,CRITICAL --input /work/${{ github.event.repository.name }}.tar
+          docker run --rm -v $(pwd):/work aquasec/trivy:0.76.2 image --exit-code 0 --severity UNKNOWN,LOW,MEDIUM --input /work/${{ github.event.repository.name }}.tar
+          docker run --rm -v $(pwd):/work aquasec/trivy:0.76.2 image --exit-code 1 --severity HIGH,CRITICAL --input /work/${{ github.event.repository.name }}.tar
