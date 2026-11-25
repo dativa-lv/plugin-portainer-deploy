@@ -13,6 +13,7 @@ Portainer Deploy Plugin for Woodpecker-CI supports GitOps workflows by deploying
 - Optionally poll a service health endpoint after the stack is running
 - Check that every image referenced by stack files exists in its registry
 - Enforce [stack rules](#stack-rules) on every stack deploy and check
+- Create and rotate [Docker Swarm configs](#swarm-configs) from files in Git, restarting the stacks that use them
 
 ## Configuration
 
@@ -45,8 +46,9 @@ Define the plugin as a step in your `.woodpecker.yaml` and provide settings unde
 | `registry-hosts` | _empty_ | no | Comma-separated registry hosts that receive `registry-username`/`registry-password`. Other registries are checked anonymously. |
 | `registry-username` | _empty_ | no | Registry username for `images-check` |
 | `registry-password` | _empty_ | no | Registry password or token for `images-check` |
+| `configs` | _empty_ | no | List of `name` + `file` entries. Switches the step to [Swarm configs](#swarm-configs) mode: nothing is deployed. |
 
-\* Required only when the corresponding feature is enabled. `stack-path` is required for stack deploys, and optional for service-update mode.
+\* Required only when the corresponding feature is enabled. `stack-path` is required for stack deploys, and optional for service-update mode. `stack-name` is not used in configs mode.
 
 ## Stack rules
 
@@ -134,6 +136,36 @@ steps:
     when:
       - event: pull_request
 ```
+
+### Create or rotate Swarm configs
+
+```yaml
+steps:
+  - name: update-configs
+    image: ghcr.io/dativa-lv/plugin-portainer-deploy
+    pull: true
+    settings:
+      server-url: http://portainer:9000
+      api-key:
+        from_secret: user-token-secret
+      server-environment: primary
+      configs:
+        - name: app-config
+          file: dev/configs/app.json
+      teams: team1,team2
+```
+
+## Swarm configs
+
+With `configs` set, the step manages Docker Swarm configs instead of deploying a stack. It cannot be combined with `stack-name`, `stack-path`, `service-name`, `health-check` or `images-check`; deploy the stack in a separate step. Each entry names a config and the workspace file with its content:
+
+- A config that does not exist is created.
+- A config whose content differs from the file is rotated. Swarm configs cannot be changed, so the plugin stops every Portainer stack whose services use the config, deletes the config, creates it again with the new content and the same labels, and starts the stacks again. A stack that was not running is not started.
+- A config whose content matches the file is not changed.
+
+Access to every config is set like stack access: restricted to `teams`, `public`, or administrators only when neither is set. Unlike stack deploys, an unknown team name fails the step.
+
+Before anything is changed, the step fails if a rotated config is used by a service that is not part of a stack, or by a stack that Portainer does not manage on this environment. If creating the new config fails, its old content is restored, and the stopped stacks are started again after any failure. With `running-check` (enabled by default), the plugin waits up to `running-check-timeout` for each restarted stack to be running.
 
 ## Job services
 

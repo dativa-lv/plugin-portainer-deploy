@@ -27,6 +27,7 @@ type Client struct {
 	plugin            *Plugin
 	httpClient        *http.Client
 	pollInterval      time.Duration
+	retryDelay        time.Duration
 	ServerURL         string
 	ServerEnvironment string
 	APIKey            string
@@ -63,8 +64,10 @@ type portainerSwarm struct {
 
 // portainerStack is the API response shape for stack list entries and create/update responses.
 type portainerStack struct {
-	ID   int    `json:"Id"`
-	Name string `json:"Name"`
+	ID         int    `json:"Id"`
+	Name       string `json:"Name"`
+	EndpointID int    `json:"EndpointId"`
+	Status     int    `json:"Status"`
 }
 
 // portainerResourceCtrl is the ResourceControl block embedded in a single-stack response.
@@ -171,6 +174,7 @@ func NewClient(plugin *Plugin, c Client) (*Client, error) {
 		plugin:            plugin,
 		httpClient:        httpClient,
 		pollInterval:      5 * time.Second,
+		retryDelay:        time.Second,
 		ServerURL:         c.ServerURL,
 		ServerEnvironment: c.ServerEnvironment,
 		StackName:         c.StackName,
@@ -429,31 +433,7 @@ func (c *Client) UpdateResourceControl(ctx context.Context, stackID int) (string
 
 	log.Debug().Msgf("Team IDs: %v", teamIDs)
 
-	var resourceControl ResourceControl
-
-	switch {
-	case c.Public:
-		resourceControl = ResourceControl{
-			AdministratorsOnly: false,
-			Public:             true,
-			Restricted:         false,
-			Teams:              []int{},
-		}
-	case len(teamIDs) > 0:
-		resourceControl = ResourceControl{
-			AdministratorsOnly: false,
-			Public:             false,
-			Restricted:         true,
-			Teams:              ConvertToIntSlice(teamIDs),
-		}
-	default:
-		resourceControl = ResourceControl{
-			AdministratorsOnly: true,
-			Public:             false,
-			Restricted:         false,
-			Teams:              []int{},
-		}
-	}
+	resourceControl := resourceControlFor(c.Public, ConvertToIntSlice(teamIDs))
 
 	jsonData, err := json.Marshal(resourceControl)
 	if err != nil {
@@ -468,6 +448,17 @@ func (c *Client) UpdateResourceControl(ctx context.Context, stackID int) (string
 	}
 
 	return "", nil
+}
+
+func resourceControlFor(public bool, teamIDs []int) ResourceControl {
+	switch {
+	case public:
+		return ResourceControl{Public: true, Teams: []int{}}
+	case len(teamIDs) > 0:
+		return ResourceControl{Restricted: true, Teams: teamIDs}
+	default:
+		return ResourceControl{AdministratorsOnly: true, Teams: []int{}}
+	}
 }
 
 // GetResourceID retrieves the ResourceControl ID for a given stack in Portainer.
@@ -537,6 +528,10 @@ func (c *Client) WaitForStackRunning(ctx context.Context, endpointID int, timeou
 		services, err := c.getStackServices(ctx, endpointID)
 		if err != nil {
 			return err
+		}
+
+		if len(services) == 0 {
+			return fmt.Errorf("stack %s has no services", c.StackName)
 		}
 
 		// Get all running tasks for the stack
@@ -872,15 +867,22 @@ func (c *Client) getJSON(ctx context.Context, requestURL string, out any) error 
 	return nil
 }
 
-// sendJSON sends an authenticated request with a JSON body and, when out is not nil, decodes the
-// JSON response into it. Non-2xx responses are returned as *statusError.
+// sendJSON sends an authenticated request with a JSON body, or without a body when payload is nil,
+// and, when out is not nil, decodes the JSON response into it. Non-2xx responses are returned as
+// *statusError.
 func (c *Client) sendJSON(ctx context.Context, method, requestURL string, payload any, header http.Header, out any) error {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
+	var body io.Reader
+
+	if payload != nil {
+		data, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("failed to marshal JSON: %w", err)
+		}
+
+		body = bytes.NewReader(data)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, requestURL, bytes.NewBuffer(body))
+	req, err := http.NewRequestWithContext(ctx, method, requestURL, body)
 	if err != nil {
 		return fmt.Errorf(requestError+"%w", err)
 	}
@@ -891,7 +893,10 @@ func (c *Client) sendJSON(ctx context.Context, method, requestURL string, payloa
 	maps.Copy(req.Header, header)
 
 	req.Header.Set(apiKeyHeader, c.APIKey)
-	req.Header.Set(contentTypeHeader, contentTypeJSON)
+
+	if payload != nil {
+		req.Header.Set(contentTypeHeader, contentTypeJSON)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

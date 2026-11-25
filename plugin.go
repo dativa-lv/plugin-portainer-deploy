@@ -35,6 +35,9 @@ type Settings struct {
 	RegistryHosts      []string
 	RegistryUsername   string
 	RegistryPassword   string
+	ConfigsJSON        string
+
+	configEntries []ConfigEntry
 
 	// Timeouts parsed by Validate.
 	runningTimeout     time.Duration
@@ -212,6 +215,12 @@ func (p *Plugin) Flags() []cli.Flag {
 			Sources:     cli.EnvVars("PLUGIN_REGISTRY_PASSWORD"),
 			Usage:       "Registry password or token for images-check",
 			Destination: &p.Settings.RegistryPassword,
+		},
+		&cli.StringFlag{
+			Name:        "configs",
+			Sources:     cli.EnvVars("PLUGIN_CONFIGS"),
+			Usage:       "List of Swarm configs (name and file) to create or rotate instead of deploying a stack",
+			Destination: &p.Settings.ConfigsJSON,
 		},
 	}
 }
